@@ -1,0 +1,229 @@
+COMMON:                    
+    add_to_collection      # Add object(s) to a collection. Result is new collection
+    exit                   # Exit the programe
+    get_app_var            # Get an app_var, you can view raina function configuration, the __all__ keyword can be used to get all configuration items
+    get_attribute          # Get attribute values
+    get_object_name        # get full_name of an object
+    getenv                 # Get the value of a system environment variable
+    help                   # List the help information
+    list_libs              # List libraries that are currently available in memory
+    log_begin              # Specify the file to save output log
+    log_end                # Close the input file redirected by the log_begin directive and change the output stream to stdout
+    log_output             # Redirect log output to a file
+    output_libs_info       # Output all libertys info for check inside in regression case
+    query_objects          # Display objects in collections in order
+    quit                   # Exit the programe
+    read_db                # Read the design database
+    read_liberty           # Read the liberty file
+    read_verilog           # Read the verilog file into the design
+    redirect               # Redirect output of a command to a file / var / tcl channel
+    remove_attribute       # remove attribute values
+    remove_from_collection # Iteratively Removing Objects From a Collection
+    remove_lib             # Removes a list of libraries from raina memory.
+    set_app_var            # Configure an app_var to change raina function configuration
+    set_attribute          # Set attribute values
+    set_black_box          # Set a module/entity/netlist to be a black box
+    set_disable_path_max_fanout
+                           # set_disable_path_max_fanout, default 10000
+    set_dont_touch         # Set nets modules instances is not allow to optimization
+    set_dont_use           # Set the cell library is not allowed to be used
+    set_message_level      # set the severity level of messages with specific tag 
+    set_parallel_options   # Enable parallel computing
+    set_print_config       # Control information output
+    setenv                 # Set the value of a system environment variable
+    sizeof_collection      # Return size of collection
+    unsetenv               # Unset the value of a system environment variable
+    write_file             # Write design to file
+REPORT:                    
+    check_design           # Checks the current design for consistency.
+    get_fanin_pins         # Show the fan-in logic cone of 'Net' or 'Pin'. Stop at a sequential cell
+    get_fanout_pins        # Show the fan-out logic cone of 'Net' or 'Pin'. Stop at a sequential cell
+    report_area            # Usage: report_area    # report area
+    report_attribute       # report attribute values
+    report_buffer_tree     #  Reports  the  buffer tree and its level information at the given driver pin.
+    report_bus             # Lists the bused ports and nets in the current instance or in the current design.
+    report_cell            # Displays information about cells in the current instance or current design
+    report_constraint      # report constraint
+    report_design          # Displays attributes of the current design
+    report_hierarchy       # Displays  the reference hierarchy of the current instance or the current design.
+    report_lib             # displays information about the  specified  logic library, physical library, or symbol library
+    report_net             # Displays information about cells in the current instance or current design
+    report_net_fanout      # Displays information about cells in the current instance or current design
+    report_port            # Displays  information about ports of the current instance or the current design.
+    report_reference       # This  command  displays information about all references in the current instance or the current design
+    report_units           # displays the units used by the current design.
+ECO:                       
+    all_connected          #  Returns the objects connected to a net, port, pin, net instance,or pin instance.
+    connect_net            # Connects a net to the specified pins or ports at the same hierarchical level.
+    connect_pin            # Connects pins or ports at any level of hierarchical.
+    create_bus             # Removes ports from the current design or its subdesign.
+    create_cell            # Create  new  leaf  or hierarchical cells in the current design or its subdesigns based on the  cell_list  argument
+    create_design          # Creates a design in RainaSynth memory.
+    create_net             # Create nets in the current design or its subdesign
+    create_port            # Create  ports in the current design or its subdesign.
+    current_design_name    # Returns the current design name.
+    current_instance       # Sets  the  working instance object and enables other commands to be used on a specific cell in the design hierarchy.
+    disconnect_net         # Breaks the connections between a net or a net instance and its pins and ports
+    insert_buffer          # Inserts  buffer  cells  on  specified  nets or nets connected to specified ports or pins
+    redo                   # Reverses the effects of a previous undo command.
+    remove_buffer          # Removes  the  buffer cells at a specified driver pin or net on a mapped design.
+    remove_bus             # Removes ports from the current design or its subdesign.
+    remove_cell            # Removes cells from the current design.
+    remove_design          # Creates a design in RainaSynth memory.
+    remove_net             # Removes nets from the current design.
+    remove_port            # Removes ports from the current design or its subdesign.
+    size_cell              # Relinks  leaf  cells to a new library cell that has the required drive strength (or other properties
+    undo                   # Reverses the  effects  of  ECO  editing  commands  (size_cell, insert_buffer, and remove_buffer).
+    undo_config            # Configures the undo stack.
+POWER/UPF:                 
+    add_port_state         # Define legal states or voltage values for a supply port
+    add_power_state        # Define power states for a power domain, supply set, or supply handle
+    add_pst_state          # Add a state to the power state table
+    associate_supply_set   # Associate a supply set with a domain handle
+    connect_supply_net     # Connect a supply net to supply ports or instance power/ground pins
+    create_power_domain    # Create a power domain
+    create_power_switch    # Create a power switch strategy
+    create_pst             # Create a power state table
+    create_supply_net      # Create a supply net
+    create_supply_port     # Create a supply port
+    create_supply_set      # Create a supply set
+    map_isolation_cell     # Map isolation cells to a specific library cell
+    map_level_shifter_cell # Map level shifter cells to a specific library cell
+    map_retention_cell     # Map retention cells to a specific library cell
+    read_upf               # Read a UPF file
+    report_isolation       # Report isolation strategy information
+    report_level_shifter   # Report level shifter strategy information
+    report_power_domain    # Report power domain information
+    report_power_state     # Report power state information
+    report_power_switch    # Report power switch information
+    report_pst             # Report power state table information
+    report_retention       # Report retention strategy information
+    report_supply_net      # Report supply net information
+    report_supply_set      # Report supply set information
+    save_upf               # Save the current UPF information to a file
+    set_domain_supply_net  # Assign primary supply nets to a power domain
+    set_isolation          # Define an isolation strategy
+    set_level_shifter      # Define a level shifter strategy
+    set_port_attributes    # Set UPF attributes on ports
+    set_retention          # Define a retention strategy
+    use_interface_cell     # Specify interface cell mapping for isolation, level shifting, or retention
+POWER/COMMAND:             
+    read_saif              # Reads a Switching Activity Interchange Format (SAIF) file and annotates switching activity information on nets, pins, ports, and cells in the current design.
+    read_vcd               # Specifies the switching activity information generated by simulation for use in power calculation.
+    report_power           # Generate a common power report during synthesis
+    report_power_calculation
+                           # Displays the calculation of the internal power for a pin, the leakage power for a cell, or the switching power for a net.
+    set_net_activity       # 
+    set_sim_clk            # 
+    set_sim_input          # 
+    set_sim_reset          # 
+    sim                    # simulation and dump vcd
+STA/COMMON:                
+    get_sta_config         # Configure an sta config to get the value of an sta configuration
+    read_sdc               # Read the sdc file
+    read_sdf               # Read the sdf file into the design
+    read_spef              # Read the spef file into the design
+    set_sta_config         # Configure an sta config to change netlist sta configuration
+    test_sta_units         # Configure an sta config to test the scale of sta units
+    update_timing          # update timing for design
+    write_graph            # write timing graph for design
+    write_sdf              # write the sdf file into the design
+STA/SDC:                   
+    all_clocks             # Collect clocks from the current design
+    all_inputs             # Collect input or inout ports from current design
+    all_outputs            # Collect output or inout ports from current design
+    all_register           # Collect cells or pins from the current design
+    characterize           # characterize constraints for a subdesign
+    create_clock           # Create or specify the clock
+    create_generated_clock # create generated clock
+    current_design         # Set the current design
+    get_cell               # Collect cells from current design
+    get_clock              # Collect clocks from the current design
+    get_lib                # Collect libraries from liberty files
+    get_lib_cell           # Collect library cells from liberty files
+    get_lib_pin            # Collect library cell pins from liberty files
+    get_net                # Collect cells from current design
+    get_pin                # Collect pins from current design
+    get_port               # Collects ports from current design
+    group_path             # group path
+    remove_case_analysis   # Removes the case-analysis value from the specified input ports or pins
+    remove_propagated_clock
+                           # Removes propagated clock latency previously set with the set_propagated_clock command, which restores ideal clock latency for the specified objects.
+    set_case_analysis      # Specifies that a port or pin is at a constant 1 or 0 logic value or has only a rising or only a falling transition applied to it
+    set_clock_gating_check # Puts setup and hold checks on clock-gating cells
+    set_clock_group        # set clock groups
+    set_clock_latency      # Specifies the clock latency for clocks, ports, or pins
+    set_clock_sense        # set clock sense
+    set_clock_transition   # Sets the transition time at clock pins clocked by specified clock
+    set_clock_uncertainty  # Specifies the uncertainty(skew) of the specified clock networks.
+    set_data_check         # set data-to-data checks
+    set_disable_clock_gating_check
+                           # Disables the clock-gating check for the specified objects in the current design.
+    set_disable_timing     # disables timing arcs in the current design
+    set_drive              # Sets the rise_drive or fall_drive attributes
+    set_driving_cell       # Specify a library cell or output pin of a library cell drives the specified ports
+    set_false_path         # Removes timing constraints from particular paths
+    set_fanout_load        # Specifies the value for the fanout_load attribute
+    set_hierarchy_separator
+                           # 
+    set_ideal_latency      # specify ideal network latency
+    set_ideal_network      # specify ideal network sources
+    set_ideal_transition   # specify ideal transition for the ideal network and ideal nets
+    set_input_delay        # Sets input delay on pins or input ports relative to a clock signal
+    set_input_transition   # specified transition values on the specified input and inout ports
+    set_load               # Sets the load attribute on the specified ports and nets
+    set_logic_dc           # Specifies one or more input ports that are to be driven by don't care
+    set_logic_one          # Specifies one or more input ports that are to be driven by logic one
+    set_logic_zero         # Specifies one or more input ports that are to be driven by logic zero
+    set_max_area           # Sets the max_area attribute to a specified value
+    set_max_capacitance    # Sets the max_capacitance attribute on the specified clocks, ports and designs
+    set_max_delay          # Specifies a maximum delay target for paths
+    set_max_fanout         # Sets the max_fanout attribute on the specified input ports and designs
+    set_max_time_borrow    # set max_time_borrow
+    set_max_transition     # Sets the maximum transition time for the specified clocks, ports or designs
+    set_min_capacitance    # Sets the min_capacitance attribute on the specified input ports
+    set_min_delay          # Specifies a minimum delay target for paths
+    set_min_pulse_width    # set min pulse width
+    set_mode               # Set mode command is used to select the active mode of a cell that has several functional modes.
+    set_multicycle_path    # Modifies the single-cycle timing relationship of a constrained path
+    set_operating_conditions
+                           # set operating conditions
+    set_output_delay       # Sets output delay on pins or output ports relative to a clock signal
+    set_port_fanout_number # Sets the fanout number on specified ports
+    set_propagated_clock   # set propagated_clock
+    set_resistance         # set annotated lumped net resistance
+    set_timing_derate      # set a derating factor on the current design or specified objects
+    set_units              # Set units for checking
+    set_wire_load_min_block_size
+                           # set wire load min block size
+    set_wire_load_mode     # Set wire load mode
+    set_wire_load_model    # Set wire load model
+    set_wire_load_selection_group
+                           # Set wire load selection group
+    write_sdc              # write constraint script for current design
+STA/REPORT:                
+    get_pin_info           # get pin info.
+    report_clock           # Displays clock-related information.
+    report_clock_fanout    # Alais report_transive_fanout -clock_tree
+    report_clock_gating    # Reports clock-gating details.
+    report_delay_calculation
+                           # Displays  the actual calculation of a timing arc delay value for a cell or net.
+    report_min_pulse_width # report min pulse width.
+    report_qor             # Displays  QoR information and statistics for the current design.
+    report_timing          # Displays timing information about a design.
+    report_timing_derate   # Reports timing derating factors previously set for the design or for specified objects using the set_timing_derate command.
+    report_wire_load       # Displays  the  characteristics  of the wire-load models set on a design or in a library.
+SYNTHESIS:                 
+    add_tieoffs            # tie the constants 1'b0 and 1'b1 in the netlist to tie high and tie low cells, respectively
+    group                  # Create new hierarchy 
+    optimize               # Optimize netlist timing and physical information. Default Timing optimization
+    read_file              # Read the design file
+    resyn                  # Re-Synthesis for mapped netlist
+    run_analyze            # Analyze the hdl files
+    run_elaborate          # Elaborate the design
+    run_synth              # Generic Synthesis
+    run_synth_netlist      # Synthesis netlist
+    set_hls_config         # Configure an config to change high level synth configuration
+    ungroup                # Flatten a specify module's cell into the module 
+HIGHLEVELSYN:              
+    high_level_synth       # Excute a synth flow

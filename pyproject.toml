@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68.0,<77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edai"
+dynamic = ["version"]
+description = "EDAI CLI tool - your AI-powered development assistant"
+readme = "README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.9"
+authors = [
+    { name = "EDAI Contributors" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+]
+
+dependencies = [
+    "prompt-toolkit>=3.0.50",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/edai"
+Repository = "https://github.com/your-org/edai.git"
+"Bug Tracker" = "https://github.com/your-org/edai/issues"
+
+[project.scripts]
+edai = "edai.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.5.0",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+]
+build = [
+    "build>=1.2",
+    "twine>=5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "edai.__version__" }
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-v --cov=edai --cov-report=term-missing"
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "D",    # pydocstyle
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "ARG",  # flake8-unused-arguments
+]
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "N", "ARG"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_configs = true
+ignore_missing_imports = true
+disallow_any_unimported = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+disallow_any_generics = false
+disallow_subclassing_any = false
