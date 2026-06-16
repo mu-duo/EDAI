@@ -11,7 +11,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from edai.tcl_engine import TclEngine
+    from edai.tool.tcl.engine import TclEngine
 
 # ── keyword → Tcl command mapping for the mock ──────────────────────
 

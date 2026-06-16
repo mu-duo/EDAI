@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from edai.agent import Agent
-from edai.completer import EdaCompleter
-from edai.repl import EdaRepl
-from edai.tcl_engine import TclEngine
+from edai.agent.agent import Agent
+from edai.tool.tcl.completer import EdaCompleter
+from edai.tool.tcl.engine import TclEngine
+from edai.tool.tcl.repl import EdaRepl
 
 
 @pytest.fixture
@@ -126,3 +126,83 @@ class TestEdaCompleter:
         names = [c.text for c in completions]
         assert "-hier" in names
         assert "-filter" in names
+
+    def test_flag_completion_from_registry(self) -> None:
+        """Flag completion reads from registry metadata, not hardcoded dict."""
+        engine = TclEngine()
+        completer = EdaCompleter(engine)
+        from prompt_toolkit.document import Document
+
+        # get_pins has -of_objects from registry metadata
+        doc = Document("get_pins -")
+        completions = list(completer.get_completions(doc, None))
+        names = [c.text for c in completions]
+        assert "-of_objects" in names
+
+    def test_flag_value_completion_from_registry(self) -> None:
+        """Flag value completion reads from registry metadata."""
+        engine = TclEngine()
+        completer = EdaCompleter(engine)
+        from prompt_toolkit.document import Document
+
+        # get_pins -of_objects → completes cell names
+        doc = Document("get_pins -of_objects u_")
+        completions = list(completer.get_completions(doc, None))
+        names = [c.text for c in completions]
+        assert "u_cpu_core" in names
+        assert "u_ram_0" in names
+
+    def test_report_timing_flag_completion(self) -> None:
+        """report_timing flags from registry metadata."""
+        engine = TclEngine()
+        completer = EdaCompleter(engine)
+        from prompt_toolkit.document import Document
+
+        doc = Document("report_timing -")
+        completions = list(completer.get_completions(doc, None))
+        names = [c.text for c in completions]
+        assert "-from" in names
+        assert "-to" in names
+        assert "-nworst" in names
+
+
+class TestSpecialCommandRouting:
+    """Tests for /command routing in the REPL."""
+
+    @pytest.mark.asyncio
+    async def test_help_special_command(self, repl: EdaRepl) -> None:
+        code = await repl._handle_input("/help")
+        assert code == 0
+
+    @pytest.mark.asyncio
+    async def test_clear_special_command(self, repl: EdaRepl) -> None:
+        code = await repl._handle_input("/clear")
+        assert code == 0
+
+    @pytest.mark.asyncio
+    async def test_debug_toggle(self, repl: EdaRepl) -> None:
+        initial = repl.verbose
+        code = await repl._handle_input("/debug")
+        assert code == 0
+        assert repl.verbose != initial
+
+    @pytest.mark.asyncio
+    async def test_env_special_command(self, repl: EdaRepl) -> None:
+        code = await repl._handle_input("/env")
+        assert code == 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_special_command(self, repl: EdaRepl) -> None:
+        code = await repl._handle_input("/nonexistent")
+        assert code == 1
+
+    @pytest.mark.asyncio
+    async def test_exit_special_command(self, repl: EdaRepl) -> None:
+        with pytest.raises(SystemExit):
+            await repl._handle_input("/exit")
+
+    @pytest.mark.asyncio
+    async def test_special_command_with_args(self, repl: EdaRepl) -> None:
+        """Extra args after the /command name are passed through."""
+        code = await repl._handle_input("/help xyz")
+        assert code == 0

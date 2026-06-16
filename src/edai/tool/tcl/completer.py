@@ -2,6 +2,12 @@
 
 Provides prompt_toolkit ``Completer`` implementations that integrate
 with ``TclEngine`` for real-time EDA object name completion.
+
+Completion metadata (flags, positional categories, flag value
+categories) is read from ``CommandRegistry``, which is populated by
+each ``@command(...)`` definition.  This means adding a new command
+with the right metadata automatically enables tab completion for it
+— no completer changes needed.
 """
 
 from __future__ import annotations
@@ -12,24 +18,15 @@ from typing import TYPE_CHECKING
 
 from prompt_toolkit.completion import Completer, Completion
 
+from edai.core.cmd_registry import registry
+
 if TYPE_CHECKING:
     from prompt_toolkit.document import Document
 
-    from edai.tcl_engine import TclEngine
+    from edai.tool.tcl.engine import TclEngine
 
 
 # ── helpers ──────────────────────────────────────────────────────────
-
-_COMMAND_FLAGS = {
-    "get_cells": ["-hier", "-filter"],
-    "get_pins": ["-of_objects"],
-    "get_nets": ["-of_objects"],
-    "set_property": [],
-    "report_timing": ["-from", "-to", "-nworst"],
-    "place_design": [],
-    "route_design": [],
-    "help": [],
-}
 
 
 def _tokenize(text: str) -> list[str]:
@@ -118,6 +115,9 @@ class EdaCompleter(Completer):
     3. Command-specific flag names
     4. Top-level command names
     5. Positional arguments based on the current command (cells, pins, etc.)
+
+    Completion metadata is sourced from the global ``CommandRegistry``
+    (populated by ``@command(...)`` decorators).
     """
 
     def __init__(self, engine: TclEngine) -> None:
@@ -196,7 +196,7 @@ class EdaCompleter(Completer):
         cmd = tokens[0]
 
         # Unknown command → no positional completions
-        if cmd not in _COMMAND_FLAGS:
+        if cmd not in registry:
             return
 
         args = tokens[1:]
@@ -216,9 +216,10 @@ class EdaCompleter(Completer):
         """Complete the current argument position for *cmd*.
 
         Checks whether we're completing a flag name, a flag value,
-        or a positional argument.
+        or a positional argument.  All metadata is sourced from the
+        ``CommandRegistry``.
         """
-        flags = _COMMAND_FLAGS.get(cmd, [])
+        flags = list(registry.get_command_flags(cmd))
         known_flags = set(flags)
 
         # Determine context from recent args
@@ -229,10 +230,12 @@ class EdaCompleter(Completer):
             yield from self._complete_flag_value(cmd, last_arg, word)
             return
 
-        # If we just finished a flag value, or are on a positional arg
+        # Track the most recent flag to determine if we're completing its value.
+        # Only update when an actual known flag is encountered.
         prev_flag = None
         for a in args:
-            prev_flag = a if a in known_flags else None
+            if a in known_flags:
+                prev_flag = a
 
         if prev_flag is not None:
             yield from self._complete_flag_value(cmd, prev_flag, word)
@@ -245,43 +248,47 @@ class EdaCompleter(Completer):
                     yield Completion(flag, start_position=-len(word))
             return
 
-        # Positional: guess the category based on command
-        for cat in self._positional_categories(cmd, completed_pos):
+        # Positional: guess the category based on command metadata
+        for cat in registry.get_positional_categories(cmd, completed_pos):
             completions = self._completions_for(cat, word)
             yield from completions
-
-    def _positional_categories(self, cmd: str, pos: int) -> list[str]:
-        """Return likely completion categories for a positional argument."""
-        mapping: dict[str, dict[int, list[str]]] = {
-            "get_cells": {0: ["cells"]},
-            "get_pins": {0: ["pins"]},
-            "get_nets": {0: ["nets"]},
-            "set_property": {0: ["properties"], 2: ["cells", "pins"]},
-            "report_timing": {},
-            "help": {},
-        }
-        return mapping.get(cmd, {}).get(pos, [])
 
     def _complete_flag_value(  # noqa: PLR0911
         self, cmd: str, flag: str, word: str
     ) -> Iterable[Completion]:
-        """Return values appropriate to a given flag."""
-        # -of_objects → cells (or pins for get_pins)
-        if flag == "-of_objects":
-            if cmd == "get_pins":
-                yield from self._completions_for("cells", word)
-            else:
-                yield from self._completions_for("cells", word)
-        elif flag in ("-from", "-to"):
-            yield from self._completions_for("pins", word)
-        elif flag == "-filter":
-            # free-form expression → no completion
+        """Return values appropriate to a given flag.
+
+        Reads completion categories from ``CommandRegistry`` metadata.
+        Falls back to engine query helpers for known virtual categories.
+        """
+        # Check registry metadata first
+        cats = registry.get_flag_value_categories(cmd, flag)
+        if cats:
+            for cat in cats:
+                yield from self._completions_for(cat, word)
             return
-        elif flag == "-nworst":
-            return  # integer
+
+        # No metadata — no completions for free-form flag values
+        return
 
     def _completions_for(self, category: str, word: str) -> Iterable[Completion]:
-        """Yield ``Completion`` items for a given object category."""
+        """Yield ``Completion`` items for a given object category.
+
+        Supports virtual categories (e.g. ``"commands"``) in addition
+        to those in ``EdaObjectCompleter.CATEGORY_MAP``.
+        """
+        # Virtual categories first
+        if category == "commands":
+            for name in self.engine.get_command_names(word):
+                yield Completion(
+                    name,
+                    start_position=-len(word),
+                    display=name,
+                    display_meta="command",
+                )
+            return
+
+        # Physical object categories (cells, pins, nets, properties)
         method_name = EdaObjectCompleter.CATEGORY_MAP.get(category)
         if method_name is None:
             return

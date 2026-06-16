@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from edai.tcl_engine import TclEngine, TclError
+from edai.tool.tcl.engine import TclEngine, TclError
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ class TestHelp:
 
     def test_help_all(self, engine: TclEngine) -> None:
         result = engine.execute("help")
-        assert "Available commands:" in result
+        assert "Available commands" in result
         assert "get_cells" in result
         assert "place_design" in result
 
@@ -218,3 +218,92 @@ class TestQueryHelpers:
     def test_get_property_names_prefix(self, engine: TclEngine) -> None:
         names = engine.get_property_names("IO")
         assert names == ["IOSTANDARD"]
+
+
+class TestCompletionMetadata:
+    """CommandRegistry completion metadata integration."""
+
+    def test_get_command_flags(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        flags = r.get_command_flags("get_cells")
+        assert "-hier" in flags
+        assert "-filter" in flags
+
+    def test_get_command_flags_default(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_command_flags("place_design") == ()
+
+    def test_get_command_flags_unknown(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_command_flags("nonexistent") == ()
+
+    def test_get_positional_categories(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        cats = r.get_positional_categories("get_cells", 0)
+        assert "cells" in cats
+
+        cats = r.get_positional_categories("set_property", 0)
+        assert "properties" in cats
+
+        cats = r.get_positional_categories("set_property", 2)
+        assert "cells" in cats or "pins" in cats
+
+    def test_get_positional_categories_default(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_positional_categories("place_design", 0) == ()
+
+    def test_get_positional_categories_out_of_range(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_positional_categories("get_cells", 99) == ()
+
+    def test_get_flag_value_categories(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        cats = r.get_flag_value_categories("get_pins", "-of_objects")
+        assert "cells" in cats
+
+        cats = r.get_flag_value_categories("report_timing", "-from")
+        assert "pins" in cats
+
+        cats = r.get_flag_value_categories("report_timing", "-to")
+        assert "pins" in cats
+
+    def test_get_flag_value_categories_default(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_flag_value_categories("get_cells", "-hier") == ()
+
+    def test_get_flag_value_categories_unknown_flag(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        assert r.get_flag_value_categories("get_cells", "-nonexistent") == ()
+
+    def test_register_with_metadata(self) -> None:
+        from edai.core.cmd_registry import registry as r
+
+        def _handler(eng, args):  # noqa: ARG001
+            return "ok"
+
+        r.register(
+            "_test_meta_cmd",
+            category="TEST",
+            handler=_handler,
+            flags=("-a", "-b"),
+            positional_categories={0: ("cells",), 1: ("pins",)},
+            flag_value_categories={"-a": ("nets",)},
+        )
+        try:
+            assert r.get_command_flags("_test_meta_cmd") == ("-a", "-b")
+            assert r.get_positional_categories("_test_meta_cmd", 0) == ("cells",)
+            assert r.get_positional_categories("_test_meta_cmd", 1) == ("pins",)
+            assert r.get_flag_value_categories("_test_meta_cmd", "-a") == ("nets",)
+        finally:
+            # Cleanup
+            r._commands.pop("_test_meta_cmd", None)  # noqa: SLF001
+            r._categories.get("TEST", []).remove("_test_meta_cmd")

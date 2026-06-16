@@ -62,7 +62,7 @@ def cmd_hello(args: argparse.Namespace) -> int:
 
 def cmd_repl(args: argparse.Namespace | None = None) -> int:
     """Handle the ``repl`` subcommand — start interactive EDA REPL."""
-    from edai.repl import run_repl
+    from edai.tool.tcl.repl import run_repl
 
     verbose = args.verbose if args else False
     history = args.history if args and hasattr(args, "history") else ".eda_history"

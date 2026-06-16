@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from edai.agent import Agent
+from edai.agent.agent import Agent
 
 
 @pytest.fixture

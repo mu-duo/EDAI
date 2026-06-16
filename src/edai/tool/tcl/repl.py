@@ -19,9 +19,9 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 
 if TYPE_CHECKING:
-    from edai.agent import Agent
-    from edai.completer import EdaCompleter
-    from edai.tcl_engine import TclEngine
+    from edai.agent.agent import Agent
+    from edai.tool.tcl.completer import EdaCompleter
+    from edai.tool.tcl.engine import TclEngine
 
 # ── styling (subtle, EDA-tool inspired) ──────────────────────────────
 
@@ -76,7 +76,7 @@ class EdaRepl:
 
         # Lazy import to avoid circular deps at class load time
         if completer is None:
-            from edai.completer import EdaCompleter
+            from edai.tool.tcl.completer import EdaCompleter
 
             completer = EdaCompleter(engine)
         self.completer = completer
@@ -149,15 +149,22 @@ class EdaRepl:
     async def _handle_input(self, text: str) -> int:
         """Process one line of user input.
 
-        If the input looks like a valid Tcl command it is executed
-        directly; otherwise it is sent to the LLM agent for
-        translation first.
+        The dispatch order is:
+
+        1. ``/command`` → special command registry (REPL meta-commands)
+        2. Valid Tcl command → engine execution
+        3. Everything else → LLM natural-language agent
         """
         text = text.strip()
         if not text:
             return 0
+
+        # 1. Special /-commands (handled by the REPL, not the Tcl engine)
+        if text.startswith("/"):
+            return self._handle_special(text)
+
+        # 2. Direct Tcl execution
         if self.engine.is_valid_tcl(text):
-            # Direct Tcl execution
             try:
                 output = self.engine.execute(text)
             except Exception as exc:  # noqa: BLE001
@@ -167,7 +174,7 @@ class EdaRepl:
                 print(output)
             return 0
 
-        # Natural language → LLM translation
+        # 3. Natural language → LLM translation
         if self.verbose:
             print("(translating via agent…)")
 
@@ -186,6 +193,33 @@ class EdaRepl:
         print(f"→ {tcl_cmd}")
         try:
             output = self.engine.execute(tcl_cmd)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Error: {exc}")
+            return 1
+        if output:
+            print(output)
+        return 0
+
+    def _handle_special(self, text: str) -> int:
+        """Handle a ``/``-prefixed special command.
+
+        Dispatches to the ``SpecialCommandRegistry`` singleton.
+        """
+        from edai.core.cmd_registry import CommandError
+        from edai.core.special_cmds import registry as special_registry
+
+        parts = text[1:].split()
+        if not parts:
+            return 0
+        cmd_name = parts[0]
+        cmd_args = parts[1:]
+        try:
+            output = special_registry.execute(cmd_name, self.engine, self, cmd_args)
+        except SystemExit:
+            raise
+        except CommandError as exc:
+            print(f"Error: {exc}")
+            return 1
         except Exception as exc:  # noqa: BLE001
             print(f"Error: {exc}")
             return 1
@@ -215,8 +249,8 @@ def run_repl(
     Creates default engine/agent if not provided, then starts the
     event loop via ``asyncio.run()``.
     """
-    from edai.agent import Agent
-    from edai.tcl_engine import TclEngine
+    from edai.agent.agent import Agent
+    from edai.tool.tcl.engine import TclEngine
 
     if engine is None:
         engine = TclEngine()

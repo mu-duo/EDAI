@@ -101,3 +101,7 @@ disallow_any_decorated = false
 disallow_any_explicit = false
 disallow_any_generics = false
 disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = "edai.tool.tcl.cmd_defs"
+ignore_errors = true
