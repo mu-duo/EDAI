@@ -28,29 +28,13 @@ class TestBuildParser:
             sys.stdout = old_stdout
         assert __version__ in output
 
+    def test_no_command_starts_repl(self) -> None:
+        """Running without any subcommand should default to REPL."""
+        from unittest.mock import patch
 
-class TestHelloCommand:
-    """Tests for the ``hello`` subcommand."""
+        with patch("edai.cli.cmd_repl", return_value=0) as mock_repl:
+            from edai.cli import main
 
-    def test_default(self, cli_runner) -> None:
-        """``hello`` without arguments should greet 'World'."""
-        rc, out = cli_runner(["hello"])
-        assert rc == 0
-        assert "Hello, World!" in out
-
-    def test_custom_name(self, cli_runner) -> None:
-        """``hello EDAI`` should greet 'EDAI'."""
-        rc, out = cli_runner(["hello", "EDAI"])
-        assert rc == 0
-        assert "Hello, EDAI!" in out
-
-    def test_verbose(self, cli_runner) -> None:
-        """``-v hello`` should include the version string."""
-        rc, out = cli_runner(["-v", "hello"])
-        assert rc == 0
-        assert __version__ in out
-
-    def test_no_command_prints_help(self, cli_runner) -> None:
-        """Running without any subcommand should return an error."""
-        rc, out = cli_runner([])
-        assert rc != 0
+            rc = main([])
+            assert rc == 0
+            mock_repl.assert_called_once_with(None)

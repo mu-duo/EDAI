@@ -28,11 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable verbose output",
     )
 
-    sub = parser.add_subparsers(dest="command", required=True, title="subcommands")
-
-    # --- hello subcommand (placeholder) ---
-    hello = sub.add_parser("hello", help="Say hello")
-    hello.add_argument("name", nargs="?", default="World", help="Who to greet")
+    sub = parser.add_subparsers(dest="command", title="subcommands")
 
     # --- repl subcommand (interactive EDA shell) ---
     repl = sub.add_parser("repl", help="Start interactive EDA Tcl REPL")
@@ -49,15 +45,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
-
-
-def cmd_hello(args: argparse.Namespace) -> int:
-    """Handle the ``hello`` subcommand."""
-    msg = f"Hello, {args.name}!"
-    if args.verbose:
-        msg += f" (edai v{__version__})"
-    print(msg)
-    return 0
 
 
 def cmd_repl(args: argparse.Namespace | None = None) -> int:
@@ -78,8 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 1
 
+    if args.command is None:
+        # No subcommand → default to interactive REPL
+        return cmd_repl(None)
+
     dispatch = {
-        "hello": cmd_hello,
         "repl": cmd_repl,
     }
 
