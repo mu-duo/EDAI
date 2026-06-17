@@ -28,13 +28,13 @@ class TestBuildParser:
             sys.stdout = old_stdout
         assert __version__ in output
 
-    def test_no_command_starts_repl(self) -> None:
-        """Running without any subcommand should default to REPL."""
+    def test_no_command_starts_tui(self) -> None:
+        """Running without any subcommand should default to TUI."""
         from unittest.mock import patch
 
-        with patch("edai.cli.cmd_repl", return_value=0) as mock_repl:
+        with patch("edai.cli.cmd_tui", return_value=0) as mock_tui:
             from edai.cli import main
 
             rc = main([])
             assert rc == 0
-            mock_repl.assert_called_once_with(None)
+            mock_tui.assert_called_once_with(None)

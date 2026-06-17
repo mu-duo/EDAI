@@ -10,7 +10,6 @@ from edai import __version__
 
 def build_parser() -> argparse.ArgumentParser:
     """Construct the top-level argument parser."""
-    """Construct the top-level argument parser."""
     parser = argparse.ArgumentParser(
         prog="edai",
         description="EDAI — AI-powered CLI toolkit",
@@ -30,30 +29,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", title="subcommands")
 
-    # --- repl subcommand (interactive EDA shell) ---
-    repl = sub.add_parser("repl", help="Start interactive EDA Tcl REPL")
-    repl.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose output (show LLM translation steps)",
-    )
-    repl.add_argument(
-        "--history",
-        default=".eda_history",
-        help="Path to history file (default: .eda_history)",
-    )
+    # --- tui subcommand (Textual TUI) ---
+    sub.add_parser("tui", help="Start Textual TUI (graphical terminal interface)")
 
     return parser
 
 
-def cmd_repl(args: argparse.Namespace | None = None) -> int:
-    """Handle the ``repl`` subcommand — start interactive EDA REPL."""
-    from edai.tool.tcl.repl import run_repl
+def cmd_tui(_args: argparse.Namespace | None = None) -> int:
+    """Handle the ``tui`` subcommand — start Textual TUI."""
+    from edai.ui.app import run_tui
 
-    verbose = args.verbose if args else False
-    history = args.history if args and hasattr(args, "history") else ".eda_history"
-    return run_repl(verbose=verbose, history_file=history)
+    return run_tui()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,11 +52,11 @@ def main(argv: list[str] | None = None) -> int:
         return e.code if isinstance(e.code, int) else 1
 
     if args.command is None:
-        # No subcommand → default to interactive REPL
-        return cmd_repl(None)
+        # No subcommand → default to Textual TUI
+        return cmd_tui(None)
 
     dispatch = {
-        "repl": cmd_repl,
+        "tui": cmd_tui,
     }
 
     handler = dispatch.get(args.command)

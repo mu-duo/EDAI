@@ -24,7 +24,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "prompt-toolkit>=3.0.50",
+    "textual>=8.0.0",
+    "langgraph==1.2.5",
 ]
 
 [project.urls]
