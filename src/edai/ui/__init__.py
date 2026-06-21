@@ -1,5 +1,5 @@
-"""Textual-based TUI for EDAI."""
+"""Simplified Textual TUI for EDAI."""
 
-from edai.ui.app import EdaiApp
+from edai.ui.app import run_tui
 
-__all__ = ["EdaiApp"]
+__all__ = ["run_tui"]

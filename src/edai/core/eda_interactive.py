@@ -49,6 +49,7 @@ class EDAInteractive:
         self.timeout = timeout
 
         self._child: pexpect.spawn | None = None
+        self.set_prompt("edai>>> ")
 
     # ── public API ───────────────────────────────────────────────────
 
@@ -89,9 +90,6 @@ class EDAInteractive:
                 if output
                 else f"Command timed out ({self.timeout}s)."
             )
-
-        if not output:
-            return "Done (no output)."
 
         return output
 
