@@ -132,7 +132,7 @@ class EdaiApp(App[None]):
             return ""
 
         response = self._interactive.send_command(stripped)
-        if response and not response.startswith("invalid command name"):
+        if self._check_tcl_response(response):
             return response
 
         # Unknown → LLM reasoning (typo correction / NL execution)
@@ -142,6 +142,16 @@ class EdaiApp(App[None]):
             return self._interactive.send_command(tcl_code)
         except Exception:
             return self._interactive.send_command(stripped)
+        
+    def _check_tcl_response(self, response: str) -> bool:
+        """Check if the response indicates a valid Tcl command execution."""
+        if not response:
+            return True  # Empty response can be valid (e.g., successful command with no output)
+        if response.startswith("invalid command name"):
+            return False
+        if response.startswith("can't read"):
+            return False
+        return True
 
     def _sync_translate(self, text: str) -> str:
         """Translate NL to Tcl via the agent (synchronous wrapper).
@@ -177,7 +187,7 @@ class EdaiApp(App[None]):
             f"{' ' * 10} ██╔══╝  ██║  ██║██╔══██║ ██║\n"
             f"{' ' * 10} ███████╗██████╔╝██║  ██║████╗\n"
             f"{' ' * 10} ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═══╝[/]\n"
-            "[bold yellow]                    EDAI  v0.1.0[/]\n"
+            "[bold yellow]                EDAI  version 0.1.0[/]\n"
             "[white]             EDA Interactive Toolkit[/]\n"
             "\n"
             "[dim]  Tab ↹ focus     ⌃C quit    ⌃L clear[/]"
