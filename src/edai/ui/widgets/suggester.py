@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, cast
+from typing import Callable, Protocol, cast
 
 from textual.suggester import Suggester
 
 from edai.core.cmd_registry import registry
 
-if TYPE_CHECKING:
-    from edai.tool.tcl.engine import TclEngine
+
+class CompletionEngine(Protocol):
+    """Protocol for objects providing EDA completion queries.
+
+    Implementations provide object-name lookups used by the completer
+    for command names, variables, cells, pins, nets, and properties.
+    """
+
+    def get_command_names(self, prefix: str) -> list[str]: ...
+    def get_variable_names(self, prefix: str) -> list[str]: ...
+    def get_cell_names(self, prefix: str) -> list[str]: ...
+    def get_pin_names(self, prefix: str) -> list[str]: ...
+    def get_net_names(self, prefix: str) -> list[str]: ...
+    def get_property_names(self, prefix: str) -> list[str]: ...
+
 
 # ── category → engine query helper ─────────────────────────────────
 
@@ -29,7 +42,7 @@ class EdaiSuggester(Suggester):
     * sync :meth:`completions` for ``TextArea.update_suggestion`` hook
     """
 
-    def __init__(self, engine: TclEngine) -> None:
+    def __init__(self, engine: CompletionEngine) -> None:
         super().__init__(use_cache=True, case_sensitive=False)
         self.engine = engine
 
@@ -47,6 +60,7 @@ class EdaiSuggester(Suggester):
         Attributes:
             prefix: The *word* (token) being completed — used by the
                 TextArea to compute the correct ghost-text suffix.
+
         """
 
         def __init__(self, candidates: list[str], prefix: str = "") -> None:
@@ -108,7 +122,11 @@ class EdaiSuggester(Suggester):
         last_arg = args[-1] if args else ""
 
         # ── 3. Flag name ──────────────────────────────────────────
-        if not typing_new and last_arg.startswith("-") and not self._is_flag_value(cmd_name, args):
+        if (
+            not typing_new
+            and last_arg.startswith("-")
+            and not self._is_flag_value(cmd_name, args)
+        ):
             flags = self._match_flags(cmd_name, last_arg)
             return self.Completions(flags, prefix=last_arg)
 
@@ -174,5 +192,7 @@ class EdaiSuggester(Suggester):
         method = _CATEGORY_MAP.get(category)
         if method is None:
             return []
-        lookup: Callable[[str], list[str]] = cast(Callable[[str], list[str]], getattr(self.engine, method))
+        lookup: Callable[[str], list[str]] = cast(
+            Callable[[str], list[str]], getattr(self.engine, method)
+        )
         return lookup(typed)

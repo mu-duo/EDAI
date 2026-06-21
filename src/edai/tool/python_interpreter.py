@@ -42,16 +42,16 @@ class PythonInterpreter(BaseTool):
 
     # ── private: persistent REPL child ────────────────────────────────
 
-    _child: pexpect.spawn | None = PrivateAttr(default=None)
+    EDA_tool: pexpect.spawn | None = PrivateAttr(default=None)
 
     def _get_repl(self) -> pexpect.spawn:
         """Return a persistent Python REPL, (re)starting if needed."""
-        if self._child is None or not self._child.isalive():
-            self._child = pexpect.spawn(
+        if self.EDA_tool is None or not self.EDA_tool.isalive():
+            self.EDA_tool = pexpect.spawn(
                 sys.executable, ["-q"], timeout=30, encoding="utf-8"
             )
-            self._child.expect(">>> ")
-        return self._child
+            self.EDA_tool.expect(">>> ")
+        return self.EDA_tool
 
     # ── helpers ───────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ class PythonInterpreter(BaseTool):
         output = self._clean_output(raw, send)
 
         if index == 1:  # EOF — REPL exited unexpectedly
-            self._child = None  # will be re-spawned on next call
+            self.EDA_tool = None  # will be re-spawned on next call
             return f"REPL closed.\n{output}" if output else "REPL closed unexpectedly."
 
         if index == 2:  # TIMEOUT — code took too long

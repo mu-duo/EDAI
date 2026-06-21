@@ -8,7 +8,7 @@ from langchain.messages import HumanMessage, SystemMessage, AIMessage
 from langgraph.store.memory import InMemoryStore
 
 
-class Agent:
+class BaseAgent:
     def __init__(self, model_name: str = "", api_key: str = ""):
         if not model_name:
             model_name = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
