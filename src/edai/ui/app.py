@@ -3,6 +3,11 @@
 On Enter:
 * If the input is a registered Tcl command → execute directly via ``EDAInteractive``.
 * Otherwise → pass to the agent (typo correction / NL translation), then execute.
+
+Message handling
+----------------
+Every user input and agent response is tracked as a :class:`~edai.core.Message`
+object, providing a single source of truth for the conversation history.
 """
 
 from __future__ import annotations
@@ -11,12 +16,12 @@ import asyncio
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, HorizontalGroup
+from textual.containers import HorizontalGroup, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
-from edai.agent.EdaAgent import EdaAgent
-from edai.core.cmd_registry import registry
+from edai.agent.EdaiAgent import EdaiAgent
 from edai.core.eda_interactive import EDAInteractive
+from edai.core.Message import Message, MessageRole
 
 
 class EdaiApp(App[None]):
@@ -48,7 +53,10 @@ class EdaiApp(App[None]):
             bin_path="/usr/bin/tclsh",
             timeout=300,
         )
-        self._agent = EdaAgent()
+        self._agent = EdaiAgent()
+
+        # Canonical conversation history — list[Message]
+        self._conversation: list[Message] = []
 
     def compose(self) -> ComposeResult:
         """Build minimal widget tree."""
@@ -58,26 +66,31 @@ class EdaiApp(App[None]):
             wrap=True,
             auto_scroll=True,
         )
-        self._input_text = Input(placeholder="Type a Tcl command or natural language\u2026")
-        self._input = HorizontalGroup()
-        with self._input:
-            yield Static(f"{self._interactive.prompt} ", markup=True, id="prompt")
-            yield self._input_text
+        self._input_text = Input(
+            placeholder="Type a Tcl command or natural language\u2026"
+        )
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
-            yield self._input
+            with HorizontalGroup():
+                yield Static(f"{self._interactive.prompt} ", markup=True, id="prompt")
+                yield self._input_text
             yield Footer()
 
     def on_mount(self) -> None:
         """Show banner and focus input."""
         self._banner()
-        self._input.focus()
+        self._input_text.focus()
 
     # ── message handlers ──────────────────────────────────────────
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Enter key → dispatch input."""
+        # Record the user input as a Message
+        user_msg = Message.human(event.value)
+        self._conversation.append(user_msg)
+
+        # Display it
         self._output.write(f"[bold cyan]{self._interactive.prompt}[/] {event.value}")
         self._run_in_worker(event.value)
         self._input_text.clear()
@@ -85,8 +98,9 @@ class EdaiApp(App[None]):
     # ── action handlers ───────────────────────────────────────────
 
     def action_clear_log(self) -> None:
-        """Ctrl+L → clear the output log."""
+        """Ctrl+L → clear the output log and conversation history."""
         self._output.clear()
+        self._conversation.clear()
         self._banner()
 
     # ── helpers ───────────────────────────────────────────────────
@@ -97,8 +111,14 @@ class EdaiApp(App[None]):
         def _task() -> None:
             try:
                 result = self._dispatch(text)
-                self._output.write(result)
+                # Record the result as a Message
+                if result:
+                    result_msg = Message.ai(result)
+                    self._conversation.append(result_msg)
+                    self._output.write(result)
             except Exception as exc:  # noqa: BLE001
+                err_msg = Message.tool(f"Error: {exc}")
+                self._conversation.append(err_msg)
                 self._output.write(f"[red]Error: {exc}[/red]")
             except SystemExit:
                 self.app.call_from_thread(self.app.exit)
@@ -115,7 +135,7 @@ class EdaiApp(App[None]):
         if response and not response.startswith("invalid command name"):
             return response
 
-        # Unknown → LLM reasoning (typo correction / NL translation)
+        # Unknown → LLM reasoning (typo correction / NL execution)
         try:
             tcl_code = self._sync_translate(stripped)
             self._output.write(f"[dim]⟹ {tcl_code}[/dim]")
@@ -123,10 +143,28 @@ class EdaiApp(App[None]):
         except Exception:
             return self._interactive.send_command(stripped)
 
-    @staticmethod
-    def _sync_translate(text: str) -> str:
-        """Translate NL to Tcl via the agent (synchronous wrapper)."""
-        return asyncio.run(EdaAgent().translate(text))
+    def _sync_translate(self, text: str) -> str:
+        """Translate NL to Tcl via the agent (synchronous wrapper).
+
+        Returns the LLM response content as a string.
+        """
+        return asyncio.run(self._agent.invoke(text))
+
+    # ── conversation accessors ────────────────────────────────────
+
+    @property
+    def conversation(self) -> list[Message]:
+        """Read-only conversation history."""
+        return list(self._conversation)
+
+    def last_user_message(self) -> Message | None:
+        """Return the most recent human message, if any."""
+        for msg in reversed(self._conversation):
+            if msg.role == MessageRole.HUMAN:
+                return msg
+        return None
+
+    # ── banner ────────────────────────────────────────────────────
 
     def _banner(self) -> None:
         """Write the welcome banner."""

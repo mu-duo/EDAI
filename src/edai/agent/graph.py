@@ -8,6 +8,14 @@ Minimal prototype — three nodes connected in a loop::
 ``agent`` translates user input into a Tcl command (mock keyword match).
 ``tools`` executes the Tcl via ``TclEngine`` and feeds results back.
 ``router`` decides whether to call a tool or stop.
+
+Message handling
+----------------
+The graph state uses **langchain ``BaseMessage``** objects because
+langgraph's ``add_messages`` reducer expects them.  The
+:class:`~edai.core.Message.Message` domain class is used for construction
+and is converted to langchain form at node boundaries via
+:func:`~edai.core.Message.messages_to_langchain`.
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 from langgraph.graph import END, START, StateGraph, add_messages
 
 from edai.agent.config import AgentConfig
+from edai.core.Message import Message
 
 if TYPE_CHECKING:
     from edai.tool.tcl.engine import TclEngine
@@ -48,7 +57,9 @@ class AgentState(TypedDict):
     """State flowing through the LangGraph agent.
 
     ``messages`` uses the ``add_messages`` reducer so new messages are
-    appended (not overwritten) on every node update.
+    appended (not overwritten) on every node update.  Items are langchain
+    ``BaseMessage`` subclasses — the domain ``Message`` type is converted
+    at the node boundary.
     """
 
     messages: Annotated[list, add_messages]
@@ -197,7 +208,7 @@ class LangGraphAgent:
         return await self.run(text, context=context)
 
     def translate_sync(self, text: str, *, context: dict | str | None = None) -> str:
-        """Alias for :meth:`run_sync` — compatible with ``Agent.translate_sync()``."""
+        """Alias for :meth:`run_sync`."""
         return self.run_sync(text, context=context)
 
     @property
@@ -208,3 +219,15 @@ class LangGraphAgent:
     @delay.setter
     def delay(self, value: float) -> None:
         self.config.delay = value
+
+    # ── Message helpers ───────────────────────────────────────────
+
+    def build_human_message(self, text: str) -> Any:
+        """Build a langchain ``HumanMessage`` from *text* via the domain type.
+
+        Example::
+
+            msg = agent.build_human_message("place the design")
+            state = await agent.graph.ainvoke({"messages": [msg]})
+        """
+        return Message.human(text).to_langchain()

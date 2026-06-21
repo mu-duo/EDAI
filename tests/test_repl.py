@@ -1,97 +1,124 @@
-"""Tests for the EDA REPL dispatch logic."""
+"""Tests for Message-based agent dispatch and UI-level integration.
+
+Since the Textual TUI cannot run in a headless test environment, this
+module tests the core dispatch and Message-tracking logic that the UI
+depends on.
+"""
 
 from __future__ import annotations
 
 import pytest
 
 from edai.agent.agent import Agent
-from edai.tool.tcl.engine import TclEngine
-from edai.tool.tcl.repl import EdaRepl
+from edai.core.Message import Message, MessageRole
 
 
-@pytest.fixture
-def repl() -> EdaRepl:
-    """REPL instance with engine and agent ready for testing."""
-    engine = TclEngine()
-    agent = Agent(engine)
-    return EdaRepl(engine, agent, verbose=False)
+# ── Agent dispatch (used by the UI's _dispatch and _sync_translate) ──
 
 
-class TestHandleInput:
-    """Test the input processing logic directly."""
+class TestAgentDispatch:
+    """The UI depends on Agent.translate() for NL→Tcl dispatch."""
 
-    @pytest.mark.asyncio
-    async def test_tcl_command_executes(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("get_cells")  # noqa: SLF001
-        assert code == 0
+    def test_agent_importable(self) -> None:
+        """Agent class must be importable (UI imports via EdaiAgent)."""
+        from edai.agent import Agent
+
+        assert Agent is not None
 
     @pytest.mark.asyncio
-    async def test_natural_language_translates(self, repl: EdaRepl) -> None:
-        """NL "place all" → translated → executed."""
-        code = await repl._handle_input("place all")  # noqa: SLF001
-        assert code == 0
-        assert repl.engine._placed is True  # noqa: SLF001
+    async def test_agent_translate_returns_string(self) -> None:
+        agent = Agent()
+        agent.delay = 0
+        result = await agent.translate("place all")
+        assert isinstance(result, str)
+        assert result == "place_design"
 
     @pytest.mark.asyncio
-    async def test_natural_language_routing(self, repl: EdaRepl) -> None:
-        repl.engine._placed = True  # noqa: SLF001
-        code = await repl._handle_input("route the design")  # noqa: SLF001
-        assert code == 0
-        assert repl.engine._routed is True  # noqa: SLF001
+    async def test_agent_preserves_conversation(self) -> None:
+        """After translate(), agent.messages should contain Message objects."""
+        agent = Agent()
+        agent.delay = 0
+        await agent.translate("list cells")
+
+        msgs = agent.messages
+        assert all(isinstance(m, Message) for m in msgs)
+
+        # Find the human message
+        human_msgs = [m for m in msgs if m.role == MessageRole.HUMAN]
+        assert len(human_msgs) == 1
+        assert human_msgs[0].content == "list cells"
+
+        # Find the AI response
+        ai_msgs = [m for m in msgs if m.role == MessageRole.AI]
+        assert len(ai_msgs) == 1
+        assert "get_cells" in ai_msgs[0].content
+
+
+class TestConversationHistory:
+    """Tests for conversation tracking with Message objects."""
+
+    def test_conversation_initial_state(self) -> None:
+        """Agent starts with a system message."""
+        agent = Agent()
+        assert len(agent.messages) >= 1
+        assert agent.messages[0].role == MessageRole.SYSTEM
 
     @pytest.mark.asyncio
-    async def test_unrecognized_nl_returns_error(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("do something completely random")  # noqa: SLF001
-        assert code == 1
+    async def test_multiple_turns(self) -> None:
+        """Multiple translations accumulate in the conversation."""
+        agent = Agent()
+        agent.delay = 0
+
+        await agent.translate("list cells")
+        await agent.translate("show nets")
+        await agent.translate("help")
+
+        human_msgs = [m for m in agent.messages if m.role == MessageRole.HUMAN]
+        assert len(human_msgs) == 3
+        assert human_msgs[0].content == "list cells"
+        assert human_msgs[1].content == "show nets"
+        assert human_msgs[2].content == "help"
 
     @pytest.mark.asyncio
-    async def test_empty_input(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("")  # noqa: SLF001
-        assert code == 0
+    async def test_clear_resets_conversation(self) -> None:
+        agent = Agent()
+        agent.delay = 0
+        await agent.translate("place all")
+        assert len(agent.messages) > 1
 
-    def test_sync_handle_input(self, repl: EdaRepl) -> None:
-        """Sync variant works for thread workers."""
-        code = repl._handle_input_sync("get_cells")  # noqa: SLF001
-        assert code == 0
+        agent.clear_history()
+        assert len(agent.messages) == 1
+        assert agent.messages[0].role == MessageRole.SYSTEM
 
 
-class TestSpecialCommandRouting:
-    """Tests for /command routing in the REPL."""
+class TestMessageLangchainConversion:
+    """The agent uses Message ↔ langchain conversion internally."""
 
-    @pytest.mark.asyncio
-    async def test_help_special_command(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("/help")  # noqa: SLF001
-        assert code == 0
+    def test_human_message_to_langchain(self) -> None:
+        msg = Message.human("test input")
+        lc = msg.to_langchain()
+        from langchain_core.messages import HumanMessage
 
-    @pytest.mark.asyncio
-    async def test_clear_special_command(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("/clear")  # noqa: SLF001
-        assert code == 0
+        assert isinstance(lc, HumanMessage)
+        assert lc.content == "test input"
 
-    @pytest.mark.asyncio
-    async def test_debug_toggle(self, repl: EdaRepl) -> None:
-        initial = repl.verbose
-        code = await repl._handle_input("/debug")  # noqa: SLF001
-        assert code == 0
-        assert repl.verbose != initial
+    def test_ai_message_from_langchain(self) -> None:
+        from langchain_core.messages import AIMessage
 
-    @pytest.mark.asyncio
-    async def test_env_special_command(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("/env")  # noqa: SLF001
-        assert code == 0
+        lc = AIMessage(content="response text")
+        msg = Message.from_langchain(lc)
+        assert msg.role == MessageRole.AI
+        assert msg.content == "response text"
 
-    @pytest.mark.asyncio
-    async def test_unknown_special_command(self, repl: EdaRepl) -> None:
-        code = await repl._handle_input("/nonexistent")  # noqa: SLF001
-        assert code == 1
+    def test_tool_message_roundtrip(self) -> None:
+        from langchain_core.messages import ToolMessage
 
-    @pytest.mark.asyncio
-    async def test_exit_special_command(self, repl: EdaRepl) -> None:
-        with pytest.raises(SystemExit):
-            await repl._handle_input("/exit")  # noqa: SLF001
+        lc = ToolMessage(content="tool output", tool_call_id="tcl_42")
+        msg = Message.from_langchain(lc)
+        assert msg.role == MessageRole.TOOL
+        assert msg.content == "tool output"
+        assert msg.metadata["tool_call_id"] == "tcl_42"
 
-    @pytest.mark.asyncio
-    async def test_special_command_with_args(self, repl: EdaRepl) -> None:
-        """Extra args after the /command name are passed through."""
-        code = await repl._handle_input("/help xyz")  # noqa: SLF001
-        assert code == 0
+        back = msg.to_langchain()
+        assert isinstance(back, ToolMessage)
+        assert back.tool_call_id == "tcl_42"
