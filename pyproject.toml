@@ -25,7 +25,12 @@ classifiers = [
 
 dependencies = [
     "textual>=8.0.0",
-    "langgraph==1.2.5",
+    "langgraph>=1.2.5",
+    "langchain-core>=0.3.0",
+    "langchain>=0.3.0",
+    "langchain-deepseek>=1.0.0",
+    "pexpect>=4.9.0",
+    "rich>=13.0.0",
 ]
 
 [project.urls]
@@ -104,5 +109,5 @@ disallow_any_generics = false
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
-module = "edai.tool.tcl.cmd_defs"
+module = "edai.core.mock_cmds"
 ignore_errors = true
