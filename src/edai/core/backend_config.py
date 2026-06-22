@@ -12,12 +12,12 @@ from pathlib import Path
 # ── prompt inference map ──────────────────────────────────────────
 
 _TOOL_PROMPTS: dict[str, str] = {
-    "dc_shell": r"dc_shell>\s*",
-    "innovus": r"innovus>\s*",
-    "genus": r"genus>\s*",
-    "vivado": r"vivado%\s*",
-    "tclsh": r"\%\s*",
-    "RainaSynth": r"RainaSynth>>\s*",
+    "dc_shell": r"dc_shell> ",
+    "innovus": r"innovus> ",
+    "genus": r"genus> ",
+    "vivado": r"vivado% ",
+    "tclsh": r"\% ",
+    "RainaSynth": r"RainaSynth>> ",
 }
 
 
@@ -28,7 +28,7 @@ def _infer_prompt(bin_path: str) -> str:
     Falls back to ``tclsh``-style ``%`` prompt.
     """
     name = Path(bin_path).stem  # strip directory and .exe
-    return _TOOL_PROMPTS.get(name, r"\%\s*")
+    return _TOOL_PROMPTS.get(name, r"\% ")
 
 
 # ── config dataclass ──────────────────────────────────────────────

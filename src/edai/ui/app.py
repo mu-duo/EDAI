@@ -117,6 +117,14 @@ class EdaiApp(App[None]):
 
     # ── helpers ───────────────────────────────────────────────────
 
+    def _check_tcl_response(self, response: str) -> bool:
+        """Check if the response indicates a valid Tcl command execution."""
+        if not response:
+            return True
+        if response.startswith("invalid command name"):
+            return False
+        return not response.startswith("can't read")
+
     def _run_in_worker(self, text: str) -> None:
         """Dispatch *text* in a background thread worker."""
 
@@ -143,24 +151,29 @@ class EdaiApp(App[None]):
         if not stripped:
             return ""
 
+        # 1. Try the raw input as a direct Tcl command.
         response = self._interactive.send_command(stripped)
         if self._check_tcl_response(response):
             return response
 
+        # 2. Not valid Tcl — ask the agent for analysis.
         try:
             llm_response = self._agent.invoke(stripped)
-            response += f"\n[bold green]Agent:[/] {llm_response}"
         except Exception as e:
-            response += f"\n[red]Agent error: {e}[/red]"
-        return response
+            return f"{response}\n[red]Agent error: {e}[/red]"
 
-    def _check_tcl_response(self, response: str) -> bool:
-        """Check if the response indicates a valid Tcl command execution."""
-        if not response:
-            return True
-        if response.startswith("invalid command name"):
-            return False
-        return not response.startswith("can't read")
+        # 3. Agent decides output format:
+        #    "[tcl command] <cmd>" → execute on _interactive
+        #    otherwise             → regular LLM reply, display as-is
+        tcl_cmd = _extract_tcl_command(llm_response)
+        if tcl_cmd:
+            tcl_result = self._interactive.send_command(tcl_cmd)
+            if self._check_tcl_response(tcl_result):
+                return f"[bold green]→ {tcl_cmd}[/]\n{tcl_result}"
+            return f"[bold green]→ {tcl_cmd}[/]\n[red]{tcl_result}[/red]"
+
+        # 4. Regular LLM reply — display as-is.
+        return f"[bold green]Agent:[/] {llm_response}"
 
     # ── conversation accessors ────────────────────────────────────
 
@@ -194,6 +207,28 @@ class EdaiApp(App[None]):
             "\n"
             "[dim]  Tab ↹ focus     ⌃C quit    ⌃L clear[/]"
         )
+
+
+# ── module-level helpers ─────────────────────────────────────────────
+
+
+_TCL_CMD_PREFIX = "[tcl command]"
+
+
+def _extract_tcl_command(text: str) -> str:
+    """If *text* starts with ``[tcl command]``, return the command part.
+
+    The agent protocol is::
+
+        [tcl command] <command>
+
+    When there is no prefix, *text* is a regular LLM reply and the
+    function returns an empty string (meaning "do not execute").
+    """
+    text = text.strip()
+    if text.lower().startswith(_TCL_CMD_PREFIX):
+        return text[len(_TCL_CMD_PREFIX) :].strip()
+    return ""
 
 
 def run_tui(config: BackendConfig | None = None) -> int:
