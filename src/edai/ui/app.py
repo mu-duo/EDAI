@@ -16,7 +16,6 @@ object, providing a single source of truth for the conversation history.
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any, Protocol
 
@@ -113,9 +112,7 @@ class EdaiApp(App[None]):
             wrap=True,
             auto_scroll=True,
         )
-        self._input_text = Input(
-            placeholder="Type a Tcl command or natural language\u2026"
-        )
+        self._input_text = Input(placeholder="Type a Tcl command or natural language\u2026")
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
@@ -182,13 +179,12 @@ class EdaiApp(App[None]):
         if self._check_tcl_response(response):
             return response
 
-        # Unknown → LLM reasoning (typo correction / NL execution)
         try:
-            tcl_code = self._sync_translate(stripped)
-            self._output.write(f"[dim]⟹ {tcl_code}[/dim]")
-            return self._interactive.send_command(tcl_code)
-        except Exception:
-            return self._interactive.send_command(stripped)
+            llm_response = self._agent.invoke(stripped)
+            response += f"\n[bold green]Agent:[/] {llm_response}"
+        except Exception as e:
+            response += f"\n[red]Agent error: {e}[/red]"
+        return response
 
     def _check_tcl_response(self, response: str) -> bool:
         """Check if the response indicates a valid Tcl command execution."""
@@ -197,13 +193,6 @@ class EdaiApp(App[None]):
         if response.startswith("invalid command name"):
             return False
         return not response.startswith("can't read")
-
-    def _sync_translate(self, text: str) -> str:
-        """Translate NL to Tcl via the agent (synchronous wrapper).
-
-        Returns the LLM response content as a string.
-        """
-        return asyncio.run(self._agent.invoke(text))
 
     # ── conversation accessors ────────────────────────────────────
 

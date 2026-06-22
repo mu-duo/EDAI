@@ -225,12 +225,12 @@ class CommandRegistry:
             Command output string.
 
         Raises:
-            CommandError: If the command is unknown.
+            CommandError: If the command is invalid.
 
         """
         handler = self.get_handler(name)
         if handler is None:
-            msg = f"unknown command: {name}"
+            msg = f"invalid command name: {name}"
             raise CommandError(msg)
         return handler(engine, args)
 

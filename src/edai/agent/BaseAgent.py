@@ -11,9 +11,7 @@ import os
 from typing import Any
 
 import rich
-from langchain.agents import create_agent
 from langchain_deepseek import ChatDeepSeek
-from langgraph.store.memory import InMemoryStore
 
 from edai.core.Message import Message, messages_to_langchain
 
@@ -44,8 +42,6 @@ class BaseAgent:
             temperature=0.9,
             api_key=api_key,
         )
-        self.memory_store = InMemoryStore()
-        self.agent = create_agent(model=self.model)
 
         # Internal message history — always list[Message]
         self._messages: list[Message] = [
@@ -94,7 +90,7 @@ class BaseAgent:
         self._messages.append(user_msg)
 
         lc_messages = messages_to_langchain(self._messages)
-        response = self.agent.invoke({"messages": lc_messages})
+        response = self.model.invoke(lc_messages)
 
         # Extract content from the AIMessage response
         content = _extract_content(response)
