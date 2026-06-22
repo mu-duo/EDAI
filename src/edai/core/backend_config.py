@@ -6,6 +6,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import Any
+from pathlib import Path
 
 
 # ── prompt inference map ──────────────────────────────────────────
@@ -16,6 +17,7 @@ _TOOL_PROMPTS: dict[str, str] = {
     "genus": r"genus>\s*",
     "vivado": r"vivado%\s*",
     "tclsh": r"\%\s*",
+    "RainaSynth": r"RainaSynth>>\s*",
 }
 
 
@@ -25,9 +27,7 @@ def _infer_prompt(bin_path: str) -> str:
     Strips directory and ``.exe`` suffix, then looks up the mapping.
     Falls back to ``tclsh``-style ``%`` prompt.
     """
-    name = os.path.basename(bin_path)
-    if name.lower().endswith(".exe"):
-        name = name[:-4]
+    name = Path(bin_path).stem  # strip directory and .exe
     return _TOOL_PROMPTS.get(name, r"\%\s*")
 
 

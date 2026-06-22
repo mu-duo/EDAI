@@ -41,6 +41,7 @@ class BaseAgent:
             model=model_name,
             temperature=0.9,
             api_key=api_key,
+            base_url=os.environ.get("LLM_BASE_URL", "https://api.deepseek.com/v1"),
         )
 
         # Internal message history — always list[Message]

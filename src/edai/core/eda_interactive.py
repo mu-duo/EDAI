@@ -49,7 +49,8 @@ class EDAInteractive:
         self.timeout = timeout
 
         self._child: pexpect.spawn | None = None
-        self.set_prompt("edai>>> ")
+
+        # self.set_prompt("edai>>> ")
 
     # ── public API ───────────────────────────────────────────────────
 
