@@ -1,8 +1,12 @@
-"""Simplified TUI — tclsh wrapper with NL/Tcl dispatch.
+"""Simplified TUI — Tcl wrapper with NL/Tcl dispatch and mock fallback.
 
 On Enter:
-* If the input is a registered Tcl command → execute directly via ``EDAInteractive``.
+* If the input is a registered Tcl command → execute directly via backend.
 * Otherwise → pass to the agent (typo correction / NL translation), then execute.
+
+Backend selection (auto):
+* ``tclsh`` on PATH → real ``EDAInteractive`` subprocess.
+* No ``tclsh`` → in-memory ``MockTclRepl`` simulation.
 
 Message handling
 ----------------
@@ -13,6 +17,8 @@ object, providing a single source of truth for the conversation history.
 from __future__ import annotations
 
 import asyncio
+import os
+from typing import Any, Protocol
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -20,8 +26,52 @@ from textual.containers import HorizontalGroup, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from edai.agent.EdaiAgent import EdaiAgent
-from edai.core.eda_interactive import EDAInteractive
 from edai.core.Message import Message, MessageRole
+
+
+class TclBackend(Protocol):
+    """Duck-typed protocol for the Tcl execution backend.
+
+    Both ``EDAInteractive`` and ``MockTclRepl`` satisfy this.
+    """
+
+    prompt: str
+
+    def send_command(self, code: str) -> str: ...
+
+
+def _find_tclsh() -> str | None:
+    """Locate ``tclsh`` on PATH, or return ``None``."""
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    for d in path_dirs:
+        candidate = os.path.join(d, "tclsh")
+        if os.path.isfile(candidate):
+            return candidate
+        candidate_exe = f"{candidate}.exe"
+        if os.path.isfile(candidate_exe):
+            return candidate_exe
+    return None
+
+
+def _create_backend() -> Any:
+    """Create a Tcl backend — real ``EDAInteractive`` or in-memory mock.
+
+    Return value satisfies :class:`TclBackend` protocol.
+    """
+    tclsh = _find_tclsh()
+    if tclsh:
+        from edai.core.eda_interactive import EDAInteractive
+
+        backend: Any = EDAInteractive(bin_path=tclsh, timeout=300)
+        print(f"Connected to Tcl shell: {tclsh}")
+        return backend
+
+    from edai.core.mock_repl import MockTclRepl
+
+    backend = MockTclRepl()
+    if backend.intro:
+        print(backend.intro)
+    return backend
 
 
 class EdaiApp(App[None]):
@@ -49,10 +99,7 @@ class EdaiApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
-        self._interactive = EDAInteractive(
-            bin_path="/usr/bin/tclsh",
-            timeout=300,
-        )
+        self._interactive = _create_backend()
         self._agent = EdaiAgent()
 
         # Canonical conversation history — list[Message]
@@ -142,16 +189,14 @@ class EdaiApp(App[None]):
             return self._interactive.send_command(tcl_code)
         except Exception:
             return self._interactive.send_command(stripped)
-        
+
     def _check_tcl_response(self, response: str) -> bool:
         """Check if the response indicates a valid Tcl command execution."""
         if not response:
-            return True  # Empty response can be valid (e.g., successful command with no output)
+            return True
         if response.startswith("invalid command name"):
             return False
-        if response.startswith("can't read"):
-            return False
-        return True
+        return not response.startswith("can't read")
 
     def _sync_translate(self, text: str) -> str:
         """Translate NL to Tcl via the agent (synchronous wrapper).
