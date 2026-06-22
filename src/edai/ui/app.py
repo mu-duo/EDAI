@@ -4,9 +4,11 @@ On Enter:
 * If the input is a registered Tcl command → execute directly via backend.
 * Otherwise → pass to the agent (typo correction / NL translation), then execute.
 
-Backend selection (auto):
-* ``tclsh`` on PATH → real ``EDAInteractive`` subprocess.
-* No ``tclsh`` → in-memory ``MockTclRepl`` simulation.
+Backend selection:
+* ``--mock`` flag → in-memory ``MockTclRepl`` simulation.
+* ``--path`` / ``-p`` → real ``EDAInteractive`` subprocess at the given binary.
+* ``tclsh`` on ``PATH`` → real ``EDAInteractive`` subprocess.
+* No backend found → in-memory ``MockTclRepl`` simulation (fallback).
 
 Message handling
 ----------------
@@ -16,8 +18,7 @@ object, providing a single source of truth for the conversation history.
 
 from __future__ import annotations
 
-import os
-from typing import Any, Protocol
+from typing import Protocol
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -25,6 +26,7 @@ from textual.containers import HorizontalGroup, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from edai.agent.EdaiAgent import EdaiAgent
+from edai.core.backend_config import BackendConfig, create_backend
 from edai.core.Message import Message, MessageRole
 
 
@@ -39,42 +41,8 @@ class TclBackend(Protocol):
     def send_command(self, code: str) -> str: ...
 
 
-def _find_tclsh() -> str | None:
-    """Locate ``tclsh`` on PATH, or return ``None``."""
-    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
-    for d in path_dirs:
-        candidate = os.path.join(d, "tclsh")
-        if os.path.isfile(candidate):
-            return candidate
-        candidate_exe = f"{candidate}.exe"
-        if os.path.isfile(candidate_exe):
-            return candidate_exe
-    return None
-
-
-def _create_backend() -> Any:
-    """Create a Tcl backend — real ``EDAInteractive`` or in-memory mock.
-
-    Return value satisfies :class:`TclBackend` protocol.
-    """
-    tclsh = _find_tclsh()
-    if tclsh:
-        from edai.core.eda_interactive import EDAInteractive
-
-        backend: Any = EDAInteractive(bin_path=tclsh, timeout=300)
-        print(f"Connected to Tcl shell: {tclsh}")
-        return backend
-
-    from edai.core.mock_repl import MockTclRepl
-
-    backend = MockTclRepl()
-    if backend.intro:
-        print(backend.intro)
-    return backend
-
-
 class EdaiApp(App[None]):
-    """Minimal Textual app wrapping tclsh with NL→Tcl agent dispatch."""
+    """Minimal Textual app wrapping a Tcl backend with NL→Tcl agent dispatch."""
 
     TITLE = "EDAI"
     SUB_TITLE = "EDA Interactive Toolkit"
@@ -96,9 +64,9 @@ class EdaiApp(App[None]):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config: BackendConfig | None = None) -> None:
         super().__init__()
-        self._interactive = _create_backend()
+        self._interactive = create_backend(config)
         self._agent = EdaiAgent()
 
         # Canonical conversation history — list[Message]
@@ -228,8 +196,15 @@ class EdaiApp(App[None]):
         )
 
 
-def run_tui() -> int:
-    """Launch the Textual TUI synchronously."""
-    app = EdaiApp()
+def run_tui(config: BackendConfig | None = None) -> int:
+    """Launch the Textual TUI synchronously.
+
+    Parameters
+    ----------
+    config:
+        Back-end configuration.  When *None* the default auto-detect
+        behaviour is used (see :func:`~edai.core.backend_config.create_backend`).
+    """
+    app = EdaiApp(config)
     result = app.run()
     return result if result is not None else 0

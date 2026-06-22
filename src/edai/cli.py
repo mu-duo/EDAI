@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from edai import __version__
+from edai.core.backend_config import BackendConfig
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +27,27 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "-p",
+        "--path",
+        type=str,
+        default=None,
+        help="Path to the EDA tool binary (default: auto-detect tclsh on PATH)",
+    )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default=None,
+        help=(
+            "Prompt pattern (regex) expected by the EDA tool "
+            "(default: infer from binary name)"
+        ),
+    )
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Use in-memory mock backend instead of a real EDA tool",
+    )
 
     sub = parser.add_subparsers(dest="command", title="subcommands")
 
@@ -35,11 +57,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def cmd_tui(_args: argparse.Namespace | None = None) -> int:
+def _build_config(args: argparse.Namespace | None) -> BackendConfig:
+    """Extract :class:`BackendConfig` from parsed arguments."""
+    if args is None:
+        return BackendConfig()
+    return BackendConfig(path=args.path, prompt=args.prompt, mock=args.mock)
+
+
+def cmd_tui(args: argparse.Namespace | None = None) -> int:
     """Handle the ``tui`` subcommand — start Textual TUI."""
     from edai.ui.app import run_tui
 
-    return run_tui()
+    config = _build_config(args)
+    return run_tui(config)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command is None:
         # No subcommand → default to Textual TUI
-        return cmd_tui(None)
+        return cmd_tui(args)
 
     dispatch = {
         "tui": cmd_tui,
