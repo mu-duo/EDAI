@@ -58,6 +58,10 @@ build = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"edai.roles" = ["*.md"]
+"edai" = ["py.typed"]
+
 [tool.setuptools.dynamic]
 version = { attr = "edai.__version__" }
 
