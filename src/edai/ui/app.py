@@ -130,7 +130,7 @@ class EdaiApp(App[None]):
         )
         self._stream_output = Static("", markup=True, id="stream-area")
         self._input_text = Input(
-            placeholder="输入 Tcl 命令或自然语言\u2026"
+            placeholder="Enter Tcl commands or natural language.\u2026"
         )
         with Vertical():
             yield Header(show_clock=True)
