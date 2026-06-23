@@ -12,8 +12,9 @@ Commands:
       are dispatched via :data:`edai.core.cmd_registry.registry`.
     * **Special REPL commands** (``/help``, ``/exit``, …) are dispatched
       via :data:`edai.core.special_cmds.registry`.
-    * ``set <var> <value>`` — set a Tcl variable.
+    * ``set <var> <value>`` — set a Tcl variable (``$var`` references in the value are resolved).
     * ``set <var>`` — print a variable's value.
+    * ``puts [-nonewline] <value>`` — print a value (with ``$var`` substitution).
     * ``expr <expression>`` — evaluate an arithmetic expression.
     * ``$var`` / ``${var}`` substitution in command arguments.
 
@@ -164,8 +165,12 @@ class MockTclRepl:
         if line.startswith("/"):
             return self._handle_special(line)
 
+        # ── puts command (print) ────────────────────────────────
+        if line.startswith("puts") and (len(line) == 4 or line[4:5] in (" ", "-")):
+            return self._handle_puts(line)
+
         # ── set command (variable assignment) ───────────────────
-        if line.startswith("set "):
+        if line.startswith("set ") or line == "set":
             return self._handle_set(line)
 
         # ── expr command (arithmetic) ───────────────────────────
@@ -207,7 +212,38 @@ class MockTclRepl:
         # ``set var value value2…`` — join remaining as value
         var_name = args[1]
         var_value = " ".join(args[2:])
+        # Resolve $var / ${var} references in the value (real Tcl behavior)
+        var_value = self.engine._substitute_var(var_value)
         return self.engine.set_var(var_name, var_value)
+
+    def _handle_puts(self, line: str) -> str:
+        """Handle ``puts [-nonewline] <value>`` — print a value.
+
+        In real Tcl, ``puts`` outputs text to stdout.  In the REPL, the
+        returned string is printed by the caller (``_handle_input``).
+
+        Supports ``$var`` / ``${var}`` variable substitution.
+        """
+        args = shlex.split(line)
+        # args[0] == "puts"
+        if len(args) == 1:
+            # ``puts`` — print a newline (return empty string)
+            return ""
+
+        no_newline = False
+        start_idx = 1
+        if args[1] == "-nonewline":
+            no_newline = True
+            start_idx = 2
+
+        if len(args) <= start_idx:
+            # nothing to print
+            return ""
+
+        value = " ".join(args[start_idx:])
+        # Variable substitution
+        value = self.engine._substitute_var(value)
+        return value
 
     def _handle_tcl_cmd(self, line: str) -> str:
         """Dispatch a registered Tcl command (with ``$var`` subst)."""
