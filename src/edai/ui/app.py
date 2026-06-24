@@ -24,7 +24,9 @@ from __future__ import annotations
 import asyncio
 from typing import Protocol
 
+from rich.align import Align
 from rich.rule import Rule
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import HorizontalGroup, Vertical
@@ -33,9 +35,9 @@ from textual.widgets import Footer, Header, Input, RichLog, Static
 from edai.agent import Agent
 from edai.core.backend_config import BackendConfig, create_backend
 from edai.core.cmd_registry import CommandError
+from edai.core.debug import debug_print
 from edai.core.Message import Message, MessageRole
 from edai.core.special_cmds import registry as special_registry
-from edai.core.debug import debug_print
 
 # ── 常量 ──────────────────────────────────────────────────────────────
 
@@ -101,7 +103,9 @@ class EdaiApp(App[None]):
             auto_scroll=True,
         )
         self._stream_output = Static("", markup=True, id="stream-area")
-        self._input_text = Input(placeholder="Enter Tcl commands or natural language.\u2026")
+        self._input_text = Input(
+            placeholder="Enter Tcl commands or natural language.\u2026"
+        )
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
@@ -120,6 +124,12 @@ class EdaiApp(App[None]):
 
         # 将 debug 输出重定向到 TUI
         set_debug_output(self._debug_output)
+
+    def on_resize(self) -> None:
+        """Re-center banner on resize when no conversation exists."""
+        if not self._conversation:
+            self._output.clear()
+            self._banner()
 
     def _debug_output(self, *args: object) -> None:
         """Write a debug line to the output widget (thread-safe).
@@ -184,7 +194,9 @@ class EdaiApp(App[None]):
             return
 
         try:
-            result = special_registry.execute(cmd_name, self._interactive, self, cmd_args)
+            result = special_registry.execute(
+                cmd_name, self._interactive, self, cmd_args
+            )
         except CommandError as exc:
             result = str(exc)
         except SystemExit:
@@ -248,10 +260,14 @@ class EdaiApp(App[None]):
                     if event_type == "token":
                         full_response += content
                         self._stream_output.update(
-                            f"[italic]{full_response}[/italic]" if full_response else _STREAM_PLACEHOLDER,
+                            f"[italic]{full_response}[/italic]"
+                            if full_response
+                            else _STREAM_PLACEHOLDER,
                         )
                     elif event_type == "tool_call":
-                        self._output.write(f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]")
+                        self._output.write(
+                            f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]"
+                        )
                     elif event_type == "tool_result":
                         if content.strip():
                             self._output.write(f"[dim]  └─ {content.strip()}[/]")
@@ -270,7 +286,9 @@ class EdaiApp(App[None]):
             self._stream_output.update("")
 
             if full_response:
-                self._output.write(f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]")
+                self._output.write(
+                    f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]"
+                )
                 result_msg = Message.ai(full_response)
                 self._conversation.append(result_msg)
 
@@ -293,20 +311,27 @@ class EdaiApp(App[None]):
     # ── Banner ──────────────────────────────────────────────────────
 
     def _banner(self) -> None:
-        """输出欢迎 Banner."""
-        self._output.write(
+        """Display a centered welcome banner using native Rich alignment."""
+        logo = Text(
             "\n"
-            "[bold cyan]"
-            f"{' ' * 10} ███████╗██████╗  █████╗ ████╗\n"
-            f"{' ' * 10} ██╔════╝██╔══██╗██╔══██╗ ██╔╝\n"
-            f"{' ' * 10} █████╗  ██║  ██║███████║ ██║\n"
-            f"{' ' * 10} ██╔══╝  ██║  ██║██╔══██║ ██║\n"
-            f"{' ' * 10} ███████╗██████╔╝██║  ██║████╗\n"
-            f"{' ' * 10} ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═══╝[/]\n"
-            "[bold yellow]                EDAI  version 0.1.0[/]\n"
-            "\n"
-            "[dim]  Tab ↹ focus     ⌃C quit    ⌃L clear[/]"
+            " ███████╗██████╗  █████╗ ████╗\n"
+            " ██╔════╝██╔══██╗██╔══██╗ ██╔╝\n"
+            " █████╗  ██║  ██║███████║ ██║\n"
+            " ██╔══╝  ██║  ██║██╔══██║ ██║\n"
+            " ███████╗██████╔╝██║  ██║████╗\n"
+            " ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═══╝",
+            style="bold cyan",
         )
+        version = Text("EDAI  version 0.1.0", style="bold yellow")
+        author = Text("author: tanlinfeng", style="dim")
+        help_text = Text("Tab ↹ focus     ⌃C quit    ⌃L clear", style="dim")
+
+        self._output.write(
+            Align.center(logo, vertical="middle")
+        )
+        self._output.write(Align.center(version, vertical="middle"))
+        self._output.write(Align.center(author, vertical="middle"))
+        self._output.write(Align.center(help_text, vertical="middle"))
 
 
 # ── 模块级辅助函数 ────────────────────────────────────────────────────
