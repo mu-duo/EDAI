@@ -269,7 +269,7 @@ class PythonInteractive:
         """Strip echoed command and trailing whitespace from REPL output."""
         lines = raw.splitlines()
         # First line is typically the echoed command — remove it
-        if lines and sent.strip() in lines[0]:
+        if lines and lines[0].strip() == sent.strip():
             lines = lines[1:]
         # Remove trailing blank lines
         while lines and not lines[-1].strip():
