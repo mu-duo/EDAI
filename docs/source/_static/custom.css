@@ -1,0 +1,43 @@
+/* ── Language switcher bar ────────────────────────────────────────── */
+/* Fixed bar at the very top of the page, always visible.            */
+
+.language-switch {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    text-align: right;
+    padding: 6px 24px;
+    font-size: 13px;
+    background: #2c3e50;
+    border-bottom: 2px solid #2980b9;
+}
+
+.lang-label {
+    color: #bdc3c7;
+    margin-right: 4px;
+}
+
+.lang-link {
+    display: inline-block;
+    padding: 2px 10px;
+    color: #ecf0f1;
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 3px;
+    transition: background 0.15s;
+}
+
+.lang-link:hover {
+    background: #34495e;
+    color: #fff;
+}
+
+.lang-link.disabled {
+    color: #95a5a6;
+    cursor: default;
+}
+
+.lang-sep {
+    color: #7f8c8d;
+    margin: 0 4px;
+}
