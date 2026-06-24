@@ -35,6 +35,7 @@ from edai.core.backend_config import BackendConfig, create_backend
 from edai.core.cmd_registry import CommandError
 from edai.core.Message import Message, MessageRole
 from edai.core.special_cmds import registry as special_registry
+from edai.core.debug import debug_print
 
 # ── 常量 ──────────────────────────────────────────────────────────────
 
@@ -112,8 +113,22 @@ class EdaiApp(App[None]):
 
     def on_mount(self) -> None:
         """显示 banner 并聚焦输入框."""
+        from edai.core.debug import set_debug_output
+
         self._banner()
         self._input_text.focus()
+
+        # 将 debug 输出重定向到 TUI
+        set_debug_output(self._debug_output)
+
+    def _debug_output(self, *args: object) -> None:
+        """Write a debug line to the output widget (thread-safe).
+
+        Can be called from any thread — routes through
+        :meth:`~textual.app.App.call_from_thread`.
+        """
+        text = " ".join(str(a) for a in args)
+        self._output.write(f"[dim][DEBUG] {text}[/]")
 
     # ── 消息处理 ────────────────────────────────────────────────────
 
@@ -224,6 +239,7 @@ class EdaiApp(App[None]):
                 return
 
             # --- 代理路径：从 ReAct 代理流式读取结果 -----------------------------
+            debug_print(f"Dispatching to ReAct agent: {stripped}")
             self._stream_output.update(_STREAM_PLACEHOLDER)
             full_response = ""
 
@@ -240,10 +256,12 @@ class EdaiApp(App[None]):
                         if content.strip():
                             self._output.write(f"[dim]  └─ {content.strip()}[/]")
                     elif event_type == "error":
+                        debug_print(f"Stream error: {content}")
                         self._stream_output.update("")
                         self._output.write(f"[red]Error: {content}[/red]")
 
             except Exception as exc:  # noqa: BLE001
+                debug_print(f"Stream exception: {exc}")
                 self._stream_output.update("")
                 self._output.write(f"[red]Stream error: {exc}[/red]")
                 return

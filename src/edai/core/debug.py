@@ -1,15 +1,9 @@
 """Global debug/verbose infrastructure for EDAI.
 
-Provides a module-level ``debug_print`` function that only emits output
-when debug mode is globally enabled.  Use ``set_debug()`` to control the
-flag at startup (typically from ``BackendConfig.verbose``).
-
-Usage::
-
-    from edai.core.debug import debug_print, set_debug
-
-    set_debug(True)
-    debug_print("cmd=get_cells args=[]")   # → "[DEBUG] cmd=get_cells args=[]"
+Provides a module-level :func:`debug_print` that only emits output
+when the global debug flag is on.  Use :func:`set_debug` to control
+the flag, and :func:`set_debug_output` to redirect output (e.g. to a
+TUI widget).  Default output goes to stdout.
 """
 
 from __future__ import annotations
@@ -17,6 +11,7 @@ from __future__ import annotations
 import sys
 
 _enabled: bool = False
+_output = lambda *a: print("[DEBUG]", *a, file=sys.stderr)  # noqa: E731
 
 
 def set_debug(enabled: bool) -> None:
@@ -25,16 +20,22 @@ def set_debug(enabled: bool) -> None:
     _enabled = bool(enabled)
 
 
-def is_debug() -> bool:
-    """Return the current global debug flag."""
-    return _enabled
+def set_debug_output(func) -> None:
+    """Redirect debug output to *func* instead of the default (stderr).
+
+    *func* receives ``(*args)`` — the same arguments passed to
+    :func:`debug_print` (without the ``[DEBUG]`` prefix).
+    """
+    global _output  # noqa: PLW0603
+    _output = func
 
 
 def debug_print(*args: object) -> None:
-    """Print *args* to stderr when global debug mode is enabled.
+    """Emit debug output when the global debug flag is enabled.
 
-    Each line is prefixed with ``[DEBUG] ``.
+    Output is sent to the function installed via :func:`set_debug_output`
+    (default: ``print`` to stderr).  Does nothing when debug is off.
     """
     if not _enabled:
         return
-    print("[DEBUG]", *args, file=sys.stderr)
+    _output(*args)
