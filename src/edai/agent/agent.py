@@ -84,6 +84,8 @@ class Agent:
             max_iterations=max_iterations,
         )
         self.graph: Any = self._build_graph()
+        # Conversation history (langchain messages) — persists across calls
+        self._messages: list = []
 
     # ── prompt construction ─────────────────────────────────────────
 
@@ -147,12 +149,15 @@ class Agent:
         """Process *text* through the ReAct graph and return the final answer."""
         from langchain_core.messages import HumanMessage
 
+        self._messages.append(HumanMessage(content=text))
+
         state = await self.graph.ainvoke(
-            {"messages": [HumanMessage(content=text)]},
+            {"messages": list(self._messages)},
             {"recursion_limit": self._config.max_iterations + 1},
         )
-        messages = state.get("messages", [])
-        return str(messages[-1].content) if messages else ""
+        self._messages = state.get("messages", [])
+        msgs = self._messages
+        return str(msgs[-1].content) if msgs else ""
 
     def run_sync(self, text: str) -> str:
         """Synchronous wrapper for :meth:`run`."""
@@ -180,14 +185,17 @@ class Agent:
         """
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-        seen_count = 0
+        self._messages.append(HumanMessage(content=text))
+        seen_count = len(self._messages) - 1  # only the just-appended msg is new
 
+        final_state: Any = None
         try:
             async for state in self.graph.astream(
-                {"messages": [HumanMessage(content=text)]},
+                {"messages": list(self._messages)},
                 {"recursion_limit": self._config.max_iterations + 1},
                 stream_mode="values",
             ):
+                final_state = state
                 step_msgs = state.get("messages", [])
                 for i in range(seen_count, len(step_msgs)):
                     msg = step_msgs[i]
@@ -210,6 +218,10 @@ class Agent:
                             yield ("token", content)
 
                 seen_count = len(step_msgs)
+
+            # Persist the full accumulated state as history
+            if final_state is not None:
+                self._messages = final_state.get("messages", [])
 
         except Exception as exc:  # noqa: BLE001
             yield ("error", str(exc))
@@ -246,7 +258,8 @@ class Agent:
         return []
 
     def clear_history(self) -> None:
-        """Backward-compat no-op."""
+        """Reset conversation history."""
+        self._messages = []
 
     @property
     def delay(self) -> float:
