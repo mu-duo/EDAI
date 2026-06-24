@@ -126,7 +126,7 @@ class EdaiApp(App[None]):
 
         # 对话块之间的视觉分隔线
         if self._conversation:
-            self._output.write(Rule(style="dim"))
+            self._output.write(Rule(style="dim"), expand=True)
 
         user_msg = Message.human(text)
         self._conversation.append(user_msg)
