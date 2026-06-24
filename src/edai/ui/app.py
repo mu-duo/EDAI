@@ -221,8 +221,9 @@ class EdaiApp(App[None]):
             )
 
             if self._check_tcl_response(response):
-                result_msg = Message.ai(response)
+                result_msg = Message.tool(response)
                 self._conversation.append(result_msg)
+                self._agent.record_command(stripped, response)
                 self._output.write(response)
                 return
 

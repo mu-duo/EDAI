@@ -15,13 +15,12 @@ import os
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
+from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain_deepseek import ChatDeepSeek
-from langchain.agents import create_agent
 
 from edai.agent.config import AgentConfig
 from edai.core.Message import Message
-
 
 # ── role / backend doc helpers ─────────────────────────────────────────
 
@@ -67,6 +66,7 @@ class Agent:
 
         agent = Agent(backend=MockTclRepl(), role="EDAI")
         result = await agent.run("list all cells")
+
     """
 
     def __init__(
@@ -260,6 +260,23 @@ class Agent:
     def clear_history(self) -> None:
         """Reset conversation history."""
         self._messages = []
+
+    def record_command(self, command: str, result: str) -> None:
+        """Record a user command and its backend result into the agent's context.
+
+        This lets the agent see direct Tcl command executions that bypassed
+        the ReAct loop (e.g. the fast-path in ``EdaiApp``).
+
+        The *command* is stored as a ``HumanMessage`` and *result* as an
+        ``AIMessage`` so the message sequence forms a valid conversation
+        (``Human→AI``) that the LLM API can accept.  A bare ``ToolMessage``
+        without a preceding ``AIMessage.tool_calls`` with a matching ID would
+        cause a 400 error from the API.
+        """
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        self._messages.append(HumanMessage(content=command))
+        self._messages.append(AIMessage(content=result))
 
     @property
     def delay(self) -> float:
