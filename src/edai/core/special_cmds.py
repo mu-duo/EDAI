@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, NamedTuple
 
+from edai.core.debug import set_debug
 from edai.core.Message import Message, MessageRole
 
 
@@ -230,17 +231,48 @@ def _cmd_exit(
     raise SystemExit(0)
 
 
-@special_command(name="debug", description="Toggle verbose/debug mode")
+@special_command(
+    name="debug",
+    description=(
+        "Control debug mode. Usage: /debug, /debug on, /debug off, /debug --status"
+    ),
+)
 def _cmd_debug(
     engine: Any,  # noqa: ARG001
     repl: Any,
-    args: list[str],  # noqa: ARG001
+    args: list[str],
 ) -> str | None:
-    if hasattr(repl, "verbose"):
+    """Control debug/verbose mode.
+
+    Sub-commands:
+        ``/debug``         — toggle.
+        ``/debug on``      — enable.
+        ``/debug off``     — disable.
+        ``/debug --status`` — query current state (no change).
+    """
+    if not hasattr(repl, "verbose"):
+        return "Debug mode not available"
+
+    raw = " ".join(args).strip().lower()
+
+    # ── --status: read-only query ───────────────────────────────
+    if raw in ("--status", "-s"):
+        return f"Debug mode is {'enabled' if repl.verbose else 'disabled'}."
+
+    # ── on / off / toggle ───────────────────────────────────────
+    if raw in ("on", "1", "enable", "true", "yes"):
+        repl.verbose = True
+    elif raw in ("off", "0", "disable", "false", "no"):
+        repl.verbose = False
+    else:
+        # toggle (bare /debug or unknown arg)
         repl.verbose = not repl.verbose
-        state = "enabled" if repl.verbose else "disabled"
-        return f"Debug mode {state}"
-    return "Debug mode not available"
+
+    # Sync global debug flag
+    set_debug(repl.verbose)
+
+    state = "enabled" if repl.verbose else "disabled"
+    return f"Debug mode {state}"
 
 
 @special_command(name="env", description="Show the current environment / engine state")

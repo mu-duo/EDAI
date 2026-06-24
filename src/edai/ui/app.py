@@ -82,13 +82,14 @@ class EdaiApp(App[None]):
 
     def __init__(self, config: BackendConfig | None = None) -> None:
         super().__init__()
-        self._interactive = create_backend(config)
+        self._config = config or BackendConfig()
+        self._interactive = create_backend(self._config)
 
         self._agent = Agent(backend=self._interactive, role="EDAI")
 
         # 规范对话历史——list[Message]
         self._conversation: list[Message] = []
-        self.verbose: bool = False  # toggled by /debug
+        self.verbose = self._config.verbose  # from CLI --verbose / /debug
 
     def compose(self) -> ComposeResult:
         """构建最小化小部件树."""
@@ -99,9 +100,7 @@ class EdaiApp(App[None]):
             auto_scroll=True,
         )
         self._stream_output = Static("", markup=True, id="stream-area")
-        self._input_text = Input(
-            placeholder="Enter Tcl commands or natural language.\u2026"
-        )
+        self._input_text = Input(placeholder="Enter Tcl commands or natural language.\u2026")
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
@@ -124,19 +123,18 @@ class EdaiApp(App[None]):
         if not text:
             return
 
+        # 清除上轮对话残留的流式内容
+        self._stream_output.update("")
+        # 对话块之间的视觉分隔线
+        if self._conversation:
+            self._output.write(Rule(style="dim"), expand=True)
+
         # ── Special commands (/help, /exit, /history, …) ──────────
         # Intercept at TUI level: don't send to backend, don't record to history
         if text.startswith("/"):
             self._handle_tui_special(text)
             self._input_text.clear()
             return
-
-        # 清除上轮对话残留的流式内容
-        self._stream_output.update("")
-
-        # 对话块之间的视觉分隔线
-        if self._conversation:
-            self._output.write(Rule(style="dim"), expand=True)
 
         user_msg = Message.human(text)
         self._conversation.append(user_msg)
@@ -171,9 +169,7 @@ class EdaiApp(App[None]):
             return
 
         try:
-            result = special_registry.execute(
-                cmd_name, self._interactive, self, cmd_args
-            )
+            result = special_registry.execute(cmd_name, self._interactive, self, cmd_args)
         except CommandError as exc:
             result = str(exc)
         except SystemExit:
@@ -236,14 +232,10 @@ class EdaiApp(App[None]):
                     if event_type == "token":
                         full_response += content
                         self._stream_output.update(
-                            f"[italic]{full_response}[/italic]"
-                            if full_response
-                            else _STREAM_PLACEHOLDER,
+                            f"[italic]{full_response}[/italic]" if full_response else _STREAM_PLACEHOLDER,
                         )
                     elif event_type == "tool_call":
-                        self._output.write(
-                            f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]"
-                        )
+                        self._output.write(f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]")
                     elif event_type == "tool_result":
                         if content.strip():
                             self._output.write(f"[dim]  └─ {content.strip()}[/]")
@@ -260,9 +252,7 @@ class EdaiApp(App[None]):
             self._stream_output.update("")
 
             if full_response:
-                self._output.write(
-                    f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]"
-                )
+                self._output.write(f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]")
                 result_msg = Message.ai(full_response)
                 self._conversation.append(result_msg)
 

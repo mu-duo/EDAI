@@ -36,6 +36,7 @@ import sys
 import edai.core.mock_cmds  # noqa: F401  -- force-register mock commands
 from edai.core.cmd_registry import CommandError
 from edai.core.cmd_registry import registry as cmd_registry
+from edai.core.debug import debug_print
 from edai.core.mock_engine import MockTclEngine
 from edai.core.special_cmds import registry as special_registry
 
@@ -260,8 +261,7 @@ class MockTclRepl:
         # Variable substitution
         substituted = self.engine.substitute_vars(raw_args)
 
-        if self.verbose:
-            print(f"[debug] cmd={cmd_name!r} args={substituted}")
+        debug_print(f"cmd={cmd_name!r} args={substituted}")
 
         try:
             return cmd_registry.execute(cmd_name, self.engine, substituted)

@@ -61,7 +61,12 @@ def _build_config(args: argparse.Namespace | None) -> BackendConfig:
     """Extract :class:`BackendConfig` from parsed arguments."""
     if args is None:
         return BackendConfig()
-    return BackendConfig(path=args.path, prompt=args.prompt, mock=args.mock)
+    return BackendConfig(
+        path=args.path,
+        prompt=args.prompt,
+        mock=args.mock,
+        verbose=args.verbose,
+    )
 
 
 def cmd_tui(args: argparse.Namespace | None = None) -> int:

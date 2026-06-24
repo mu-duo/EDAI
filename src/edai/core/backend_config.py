@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from pathlib import Path
 
+from edai.core.debug import set_debug
+
 
 # ── prompt inference map ──────────────────────────────────────────
 
@@ -54,6 +56,7 @@ class BackendConfig:
     path: str | None = None
     prompt: str | None = None
     mock: bool = False
+    verbose: bool = False
 
 
 # ── helpers ───────────────────────────────────────────────────────
@@ -91,6 +94,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
     protocol.
     """
     cfg = config or BackendConfig()
+    set_debug(cfg.verbose)
 
     # ── explicit mock ──────────────────────────────────────────
     if cfg.mock:
@@ -102,6 +106,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         from edai.core.mock_repl import MockTclRepl
 
         backend: Any = MockTclRepl()
+        backend.verbose = cfg.verbose
         if backend.intro:
             print(backend.intro)
         return backend
@@ -114,6 +119,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         from edai.core.eda_interactive import EDAInteractive
 
         backend = EDAInteractive(bin_path=cfg.path, prompt=prompt, timeout=300)
+        backend.verbose = cfg.verbose
         print(f"Connected to EDA tool: {cfg.path}")
         return backend
 
@@ -124,6 +130,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         from edai.core.eda_interactive import EDAInteractive
 
         backend = EDAInteractive(bin_path=tclsh, prompt=prompt, timeout=300)
+        backend.verbose = cfg.verbose
         print(f"Connected to Tcl shell: {tclsh}")
         return backend
 
@@ -131,6 +138,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
     from edai.core.mock_repl import MockTclRepl
 
     backend = MockTclRepl()
+    backend.verbose = cfg.verbose
     if backend.intro:
         print(backend.intro)
     return backend
