@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from edai.core.cmd_registry import CommandError
+from edai.core.Message import Message
 from edai.core.special_cmds import SpecialCommandRegistry
 
 
@@ -253,3 +254,169 @@ class TestBuiltinCommands:
         output = registry.execute("help", None, None, [])
         assert output is not None
         assert "/help" in output
+
+    def test_help_shows_history(self) -> None:
+        """/history is not hidden, so it should appear in /help output."""
+        from edai.core.special_cmds import registry
+
+        output = registry.execute("help", None, None, [])
+        assert output is not None
+        assert "/history" in output
+
+
+class TestHistoryCommand:
+    """Tests for the ``/history`` special command."""
+
+    @pytest.fixture
+    def mock_repl_with_history(self) -> Any:
+        """A repl-like object with a `_conversation` containing sample messages."""
+
+        class MockRepl:
+            def __init__(self) -> None:
+                self._conversation = [
+                    Message.human("get_cells"),
+                    Message.ai("Found 6 cells."),
+                    Message.human("report_timing -max_paths 5"),
+                    Message.ai("Timing report generated."),
+                    Message.human("place_design"),
+                    Message.tool("Placement completed successfully."),
+                ]
+
+        return MockRepl()
+
+    @pytest.fixture
+    def empty_repl(self) -> Any:
+        """A repl-like object with an empty conversation."""
+
+        class MockRepl:
+            def __init__(self) -> None:
+                self._conversation: list[Message] = []
+
+        return MockRepl()
+
+    @pytest.fixture
+    def bare_repl(self) -> Any:
+        """A repl-like object with no conversation attribute at all."""
+
+        class MockRepl:
+            pass
+
+        return MockRepl()
+
+    # ── registration ──────────────────────────────────────────────
+
+    def test_history_registered(self) -> None:
+        from edai.core.special_cmds import registry
+
+        cmd = registry.get("history")
+        assert cmd is not None
+        assert cmd.description.startswith("Show conversation history")
+
+    def test_history_has_hist_alias(self) -> None:
+        from edai.core.special_cmds import registry
+
+        cmd = registry.get("hist")
+        assert cmd is not None
+        assert cmd.name == "history"
+
+    # ── edge cases ────────────────────────────────────────────────
+
+    def test_history_no_conversation(self, bare_repl: Any) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, bare_repl, [])
+        assert result == "No conversation history available."
+
+    def test_history_empty(self, empty_repl: Any) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, empty_repl, [])
+        assert result == "No conversation history available."
+
+    def test_history_via_alias(self, mock_repl_with_history: Any) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("hist", None, mock_repl_with_history, [])
+        assert result is not None
+        assert "Conversation history" in result
+
+    # ── output format ─────────────────────────────────────────────
+
+    def test_history_output(self, mock_repl_with_history: Any) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, mock_repl_with_history, [])
+        assert result is not None
+
+        # Has header
+        assert result.startswith("Conversation history:")
+
+        # Contains numbered entries
+        assert "  1." in result
+        assert "  6." in result
+
+        # Contains role labels
+        assert "HUMAN:" in result
+        assert "AI:" in result
+        assert "TOOL:" in result
+
+        # Contains message content
+        assert "get_cells" in result
+        assert "Found 6 cells." in result
+        assert "Placement completed successfully." in result
+
+        # Contains Rich markup tags
+        assert "[bold cyan]" in result
+        assert "[bold green]" in result
+        assert "[bold yellow]" in result
+        assert "[/]" in result
+
+    # ── numeric argument ──────────────────────────────────────────
+
+    def test_history_n_returns_last_n(self, mock_repl_with_history: Any) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, mock_repl_with_history, ["3"])
+        assert result is not None
+        # Should show only the last 3 messages (indices 4, 5, 6)
+        assert "  4." in result
+        assert "  5." in result
+        assert "  6." in result
+        assert "  1." not in result
+        assert "  2." not in result
+        assert "  3." not in result
+
+    def test_history_n_more_than_total(self, mock_repl_with_history: Any) -> None:
+        """Asking for more than available shows all messages."""
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, mock_repl_with_history, ["99"])
+        assert result is not None
+        assert "  1." in result
+        assert "  6." in result
+
+    @pytest.mark.parametrize(
+        "bad_arg, expected_substr",
+        [
+            ("abc", "Invalid argument"),
+            ("-1", "must be positive"),
+            ("0", "must be positive"),
+        ],
+    )
+    def test_history_invalid_n(
+        self, mock_repl_with_history: Any, bad_arg: str, expected_substr: str
+    ) -> None:
+        from edai.core.special_cmds import registry
+
+        result = registry.execute("history", None, mock_repl_with_history, [bad_arg])
+        assert result is not None
+        assert expected_substr in result
+
+    # ── interaction with /help ────────────────────────────────────
+
+    def test_history_not_hidden(self) -> None:
+        from edai.core.special_cmds import registry
+
+        cmd = registry.get("history")
+        assert cmd is not None
+        assert not cmd.hidden

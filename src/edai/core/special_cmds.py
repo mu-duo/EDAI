@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from typing import Any, Callable, NamedTuple
 
+from edai.core.Message import Message, MessageRole
+
 
 class SpecialCommandDef(NamedTuple):
     """Metadata for a registered special command.
@@ -260,4 +262,60 @@ def _cmd_env(
         lines.append(f"  Variables:   {len(engine.variables)}")
     if hasattr(repl, "verbose"):
         lines.append(f"  Debug mode:  {repl.verbose}")
+    return "\n".join(lines)
+
+
+@special_command(
+    name="history",
+    aliases=("hist",),
+    description="Show conversation history. Usage: /history [N]",
+)
+def _cmd_history(
+    engine: Any,  # noqa: ARG001
+    repl: Any,
+    args: list[str],
+) -> str | None:
+    """Show conversation history.
+
+    Usage: /history [N]
+
+    If *N* is provided, shows only the last *N* messages.
+    The ``repl`` object must expose ``.conversation`` (or ``._conversation``).
+    """
+    conversation: list[Message] | None = getattr(repl, "conversation", None)
+    if conversation is None:
+        conversation = getattr(repl, "_conversation", None)
+    if not conversation:
+        return "No conversation history available."
+
+    # ── parse optional N argument ──────────────────────────────────
+    n: int | None = None
+    if args:
+        try:
+            n = int(args[0])
+        except ValueError:
+            return f"Invalid argument: {args[0]!r}. Usage: /history [N]"
+        if n <= 0:
+            return "Number of messages must be positive."
+
+    messages = conversation if n is None else conversation[-n:]
+
+    # ── build output ───────────────────────────────────────────────
+    role_styles: dict[MessageRole, str] = {
+        MessageRole.HUMAN: "[bold cyan]",
+        MessageRole.AI: "[bold green]",
+        MessageRole.TOOL: "[bold yellow]",
+        MessageRole.SYSTEM: "[dim]",
+    }
+
+    # Find the number of leading digits we'll need
+    offset = (len(conversation) - len(messages)) + 1 if n is not None else 1
+    lines = ["Conversation history:", ""]
+    for idx, msg in enumerate(messages, start=offset):
+        style = role_styles.get(msg.role, "")
+        role_label = msg.role.value.upper()
+        # Truncate long content for readability
+        content = msg.content[:200] + "…" if len(msg.content) > 200 else msg.content
+        lines.append(f"  {idx:>3}. {style}{role_label}:[/] {content}")
+
     return "\n".join(lines)

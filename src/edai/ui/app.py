@@ -32,7 +32,9 @@ from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from edai.agent import Agent
 from edai.core.backend_config import BackendConfig, create_backend
+from edai.core.cmd_registry import CommandError
 from edai.core.Message import Message, MessageRole
+from edai.core.special_cmds import registry as special_registry
 
 # ── 常量 ──────────────────────────────────────────────────────────────
 
@@ -86,6 +88,7 @@ class EdaiApp(App[None]):
 
         # 规范对话历史——list[Message]
         self._conversation: list[Message] = []
+        self.verbose: bool = False  # toggled by /debug
 
     def compose(self) -> ComposeResult:
         """构建最小化小部件树."""
@@ -121,6 +124,13 @@ class EdaiApp(App[None]):
         if not text:
             return
 
+        # ── Special commands (/help, /exit, /history, …) ──────────
+        # Intercept at TUI level: don't send to backend, don't record to history
+        if text.startswith("/"):
+            self._handle_tui_special(text)
+            self._input_text.clear()
+            return
+
         # 清除上轮对话残留的流式内容
         self._stream_output.update("")
 
@@ -134,6 +144,45 @@ class EdaiApp(App[None]):
         self._output.write(f"[bold cyan]{self._interactive.prompt}[/] {text}")
         self._run_worker_stream(text)
         self._input_text.clear()
+
+    # ── 特殊命令处理 ──────────────────────────────────────────────────
+
+    def _handle_tui_special(self, text: str) -> None:
+        """Handle a ``/``-prefixed special command at TUI level.
+
+        Never sends the command to the backend and never records it in
+        the conversation history (``_conversation``).
+        """
+        import shlex
+
+        parts = shlex.split(text)
+        raw_name = parts[0]
+        cmd_name = raw_name.lstrip("/")
+        cmd_args = parts[1:]
+
+        # /exit 和 /quit 由 TUI 直接处理
+        if cmd_name in ("exit", "quit"):
+            self.exit()
+            return
+
+        # /clear 使用现有的 clear_log 动作
+        if cmd_name in ("clear", "cls"):
+            self.action_clear_log()
+            return
+
+        try:
+            result = special_registry.execute(
+                cmd_name, self._interactive, self, cmd_args
+            )
+        except CommandError as exc:
+            result = str(exc)
+        except SystemExit:
+            # /exit 如果穿透到 registry（兜底保护）
+            self.exit()
+            return
+
+        if result:
+            self._output.write(result)
 
     # ── 动作处理 ─────────────────────────────────────────────────────
 
@@ -171,7 +220,6 @@ class EdaiApp(App[None]):
                 stripped,
             )
 
-            
             if self._check_tcl_response(response):
                 result_msg = Message.ai(response)
                 self._conversation.append(result_msg)
@@ -197,9 +245,7 @@ class EdaiApp(App[None]):
                         )
                     elif event_type == "tool_result":
                         if content.strip():
-                            self._output.write(
-                                f"[dim]  └─ {content.strip()}[/]"
-                            )
+                            self._output.write(f"[dim]  └─ {content.strip()}[/]")
                     elif event_type == "error":
                         self._stream_output.update("")
                         self._output.write(f"[red]Error: {content}[/red]")
