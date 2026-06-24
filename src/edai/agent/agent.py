@@ -186,25 +186,30 @@ class Agent:
             async for state in self.graph.astream(
                 {"messages": [HumanMessage(content=text)]},
                 {"recursion_limit": self._config.max_iterations + 1},
+                stream_mode="values",
             ):
-                for _node_name, snapshot in state.items():
-                    step_msgs = snapshot.get("messages", [])
-                    for i in range(seen_count, len(step_msgs)):
-                        msg = step_msgs[i]
+                step_msgs = state.get("messages", [])
+                for i in range(seen_count, len(step_msgs)):
+                    msg = step_msgs[i]
 
-                        if isinstance(msg, ToolMessage):
-                            yield ("tool_result", str(msg.content))
-                        elif isinstance(msg, AIMessage):
-                            tool_calls = getattr(msg, "tool_calls", [])
-                            if tool_calls:
-                                for tc in tool_calls:
-                                    name = tc.get("name", "execute")
-                                    yield ("tool_call", name)
-                            content = str(msg.content) if msg.content else ""
-                            if content:
-                                yield ("token", content)
+                    if isinstance(msg, ToolMessage):
+                        yield ("tool_result", str(msg.content))
+                    elif isinstance(msg, AIMessage):
+                        tool_calls = getattr(msg, "tool_calls", [])
+                        if tool_calls:
+                            for tc in tool_calls:
+                                args = tc.get("args", {})
+                                cmd = (
+                                    args.get("command", "")
+                                    if isinstance(args, dict)
+                                    else ""
+                                )
+                                yield ("tool_call", cmd if cmd else tc.get("name", "execute"))
+                        content = str(msg.content) if msg.content else ""
+                        if content:
+                            yield ("token", content)
 
-                    seen_count = len(step_msgs)
+                seen_count = len(step_msgs)
 
         except Exception as exc:  # noqa: BLE001
             yield ("error", str(exc))
