@@ -332,6 +332,7 @@ class EdaiApp(App[None]):
         self._output.write(Align.center(version, vertical="middle"))
         self._output.write(Align.center(author, vertical="middle"))
         self._output.write(Align.center(help_text, vertical="middle"))
+        self._output.write(Rule(style="dim"), expand=True)
 
 
 # ── 模块级辅助函数 ────────────────────────────────────────────────────
