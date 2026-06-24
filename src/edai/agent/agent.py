@@ -17,7 +17,7 @@ from typing import Any
 
 from langchain.tools import tool
 from langchain_deepseek import ChatDeepSeek
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 from edai.agent.config import AgentConfig
 from edai.core.Message import Message
@@ -135,7 +135,11 @@ class Agent:
             return backend.send_command(command)
 
         system_prompt = self._build_system_prompt()
-        return create_react_agent(llm, [execute], prompt=system_prompt, version="v2")
+        return create_agent(
+            llm,
+            tools=[execute],
+            system_prompt=system_prompt,
+        )
 
     # ── public API ──────────────────────────────────────────────────
 
