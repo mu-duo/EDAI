@@ -36,6 +36,9 @@ class PythonInteractive:
 
     """
 
+    backend_type = "python"
+    """Identifier for backend MD docs (``roles/backends/python.md``)."""
+
     def __init__(
         self,
         prompt: str = ">>> ",

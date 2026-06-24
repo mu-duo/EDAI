@@ -1,152 +1,49 @@
-"""Tests for the mock LLM agent and Message integration."""
+"""Tests for Agent construction and Message integration."""
 
 from __future__ import annotations
 
-import pytest
-
-from edai.agent.agent import Agent
 from edai.core.Message import Message, MessageRole, messages_from_langchain
 
 
-@pytest.fixture
-def agent() -> Agent:
-    """Fresh agent instance per test."""
-    return Agent()
+# ── Agent construction tests ───────────────────────────────────────────
 
 
-# ── Translation tests (legacy Agent API) ─────────────────────────────
+class TestAgentConstruction:
+    """Agent class must be constructable with a mock backend."""
 
+    def test_agent_importable(self) -> None:
+        from edai.agent import Agent
 
-class TestTranslation:
-    """Natural language → Tcl translation."""
+        assert Agent is not None
 
-    @pytest.mark.asyncio
-    async def test_place_design(self, agent: Agent) -> None:
-        agent.delay = 0  # no delay for tests
-        result = await agent.translate("please place all the design")
-        assert result == "place_design"
+    def test_agent_construct_with_mock_backend(self) -> None:
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
 
-    @pytest.mark.asyncio
-    async def test_route_design(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("run routing for the design")
-        assert result == "route_design"
+        agent = Agent(backend=MockTclRepl(), role="EDAI")
+        assert agent.backend is not None
+        assert agent._role == "EDAI"
+        assert agent.graph is not None
 
-    @pytest.mark.asyncio
-    async def test_timing_report(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("show me the timing report")
-        assert result == "report_timing"
+    def test_agent_backend_type_detected(self) -> None:
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
 
-    @pytest.mark.asyncio
-    async def test_get_cells(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("list cells")
-        assert result == "get_cells"
+        agent = Agent(backend=MockTclRepl())
+        bt = getattr(agent.backend, "backend_type", "")
+        assert bt == "mock"
 
-    @pytest.mark.asyncio
-    async def test_get_nets(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("show nets")
-        assert result == "get_nets"
+    def test_agent_backward_compat_aliases(self) -> None:
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
 
-    @pytest.mark.asyncio
-    async def test_get_pins(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("show pins")
-        assert result == "get_pins"
-
-    @pytest.mark.asyncio
-    async def test_help_query(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("what can you do")
-        assert result == "help"
-
-    @pytest.mark.asyncio
-    async def test_unrecognized_input(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("sing me a song about FPGAs")
-        assert result.startswith("#")
-
-    @pytest.mark.asyncio
-    async def test_empty_input(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = await agent.translate("")
-        assert result.startswith("#")
-
-    @pytest.mark.asyncio
-    async def test_simulated_delay(self, agent: Agent) -> None:
-        import time
-
-        agent.delay = 0.1
-        start = time.monotonic()
-        await agent.translate("place all")
-        elapsed = time.monotonic() - start
-        assert elapsed >= 0.08  # allow small tolerance
-
-    @pytest.mark.asyncio
-    async def test_context_is_ignored_by_mock(self, agent: Agent) -> None:
-        """The mock doesn't use context, but should accept it gracefully."""
-        agent.delay = 0
-        result = await agent.translate(
-            "place all",
-            context={"placed": False, "routed": False, "cell_count": 6, "net_count": 5},
-        )
-        assert result == "place_design"
-
-
-class TestSyncWrapper:
-    """Synchronous convenience wrapper."""
-
-    def test_translate_sync(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = agent.translate_sync("route all")
-        assert result == "route_design"
-
-    def test_translate_sync_unknown(self, agent: Agent) -> None:
-        agent.delay = 0
-        result = agent.translate_sync("do something weird")
-        assert result.startswith("#")
-
-
-# ── Message integration tests ────────────────────────────────────────
-
-
-class TestMessageHistory:
-    """Agent conversation history is tracked via Message objects."""
-
-    def test_initial_messages_contains_system_prompt(self, agent: Agent) -> None:
-        assert len(agent.messages) >= 1
-        assert agent.messages[0].role == MessageRole.SYSTEM
-        assert "EDA assistant" in agent.messages[0].content
-
-    @pytest.mark.asyncio
-    async def test_translate_appends_human_and_ai_messages(self, agent: Agent) -> None:
-        agent.delay = 0
-        initial_count = len(agent.messages)
-
-        await agent.translate("place the design")
-
-        assert len(agent.messages) == initial_count + 2  # human + ai
-        assert agent.messages[-2].role == MessageRole.HUMAN
-        assert "place the design" in agent.messages[-2].content
-        assert agent.messages[-1].role == MessageRole.AI
-
-    @pytest.mark.asyncio
-    async def test_clear_history(self, agent: Agent) -> None:
-        agent.delay = 0
-        await agent.translate("place all")
-        assert len(agent.messages) > 1
-
-        agent.clear_history()
-        assert len(agent.messages) == 1
-        assert agent.messages[0].role == MessageRole.SYSTEM
-
-    def test_messages_are_read_only_copy(self, agent: Agent) -> None:
-        msgs = agent.messages
-        msgs.clear()
-        # Agent's internal list should be unaffected
-        assert len(agent.messages) >= 1
+        agent = Agent(backend=MockTclRepl())
+        # These should not raise
+        assert agent.messages == []
+        assert agent.delay == 0.0
+        agent.delay = 99
+        assert agent.delay == 0.0  # setter is no-op
+        agent.clear_history()  # should not raise
 
 
 class TestMessageClass:

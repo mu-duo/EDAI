@@ -2,21 +2,16 @@
 
 Quick start::
 
-    from edai.agent import LangGraphAgent, AgentConfig
+    from edai.agent import Agent, AgentConfig
+    from edai.core.mock_repl import MockTclRepl
 
-    config = AgentConfig.from_json("agent_config.json")
-    agent = LangGraphAgent(config, engine=my_engine)
+    agent = Agent(backend=MockTclRepl(), role="EDAI")
 
-    result = await agent.run("place the design")
-    result = agent.run_sync("place the design")
-
-The legacy mock ``Agent`` (keyword matcher) is available at
-``edai.agent.agent.Agent``.  Both use :class:`~edai.core.Message.Message`
-as the canonical message type.
+    result = await agent.run("list all cells")
+    result = agent.run_sync("list all cells")
 """
 
 from edai.agent.agent import Agent
 from edai.agent.config import AgentConfig
-from edai.agent.graph import LangGraphAgent
 
-__all__ = ["Agent", "AgentConfig", "LangGraphAgent"]
+__all__ = ["Agent", "AgentConfig"]

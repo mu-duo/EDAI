@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-from edai.agent.agent import Agent
 from edai.core.Message import Message, MessageRole
 
 
@@ -17,78 +16,32 @@ from edai.core.Message import Message, MessageRole
 
 
 class TestAgentDispatch:
-    """The UI depends on Agent.translate() for NL→Tcl dispatch."""
+    """The UI depends on Agent being importable."""
 
     def test_agent_importable(self) -> None:
-        """Agent class must be importable (UI imports via EdaiAgent)."""
         from edai.agent import Agent
 
         assert Agent is not None
-
-    @pytest.mark.asyncio
-    async def test_agent_translate_returns_string(self) -> None:
-        agent = Agent()
-        agent.delay = 0
-        result = await agent.translate("place all")
-        assert isinstance(result, str)
-        assert result == "place_design"
-
-    @pytest.mark.asyncio
-    async def test_agent_preserves_conversation(self) -> None:
-        """After translate(), agent.messages should contain Message objects."""
-        agent = Agent()
-        agent.delay = 0
-        await agent.translate("list cells")
-
-        msgs = agent.messages
-        assert all(isinstance(m, Message) for m in msgs)
-
-        # Find the human message
-        human_msgs = [m for m in msgs if m.role == MessageRole.HUMAN]
-        assert len(human_msgs) == 1
-        assert human_msgs[0].content == "list cells"
-
-        # Find the AI response
-        ai_msgs = [m for m in msgs if m.role == MessageRole.AI]
-        assert len(ai_msgs) == 1
-        assert "get_cells" in ai_msgs[0].content
 
 
 class TestConversationHistory:
     """Tests for conversation tracking with Message objects."""
 
     def test_conversation_initial_state(self) -> None:
-        """Agent starts with a system message."""
-        agent = Agent()
-        assert len(agent.messages) >= 1
-        assert agent.messages[0].role == MessageRole.SYSTEM
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
 
-    @pytest.mark.asyncio
-    async def test_multiple_turns(self) -> None:
-        """Multiple translations accumulate in the conversation."""
-        agent = Agent()
-        agent.delay = 0
+        agent = Agent(backend=MockTclRepl())
+        assert agent.messages == []
+        assert agent.delay == 0.0
 
-        await agent.translate("list cells")
-        await agent.translate("show nets")
-        await agent.translate("help")
+    def test_clear_history(self) -> None:
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
 
-        human_msgs = [m for m in agent.messages if m.role == MessageRole.HUMAN]
-        assert len(human_msgs) == 3
-        assert human_msgs[0].content == "list cells"
-        assert human_msgs[1].content == "show nets"
-        assert human_msgs[2].content == "help"
-
-    @pytest.mark.asyncio
-    async def test_clear_resets_conversation(self) -> None:
-        agent = Agent()
-        agent.delay = 0
-        await agent.translate("place all")
-        assert len(agent.messages) > 1
-
+        agent = Agent(backend=MockTclRepl())
         agent.clear_history()
-        assert len(agent.messages) == 1
-        assert agent.messages[0].role == MessageRole.SYSTEM
+        assert agent.messages == []
 
 
 class TestMessageLangchainConversion:

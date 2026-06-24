@@ -35,6 +35,9 @@ class EDAInteractive:
 
     """
 
+    backend_type = "tclsh"
+    """Identifier for backend MD docs (``roles/backends/tclsh.md``)."""
+
     def __init__(
         self,
         bin_path: str,

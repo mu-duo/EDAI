@@ -1,138 +1,249 @@
-"""Legacy-compatible mock Agent for natural-language → Tcl translation.
+"""ReAct agent for NL → backend-command translation.
 
-This module provides the ``Agent`` class that was the original EDAI agent.
-It performs simple keyword matching (no real LLM) and uses the canonical
-:class:`~edai.core.Message.Message` type for internal bookkeeping.
+The :class:`Agent` builds a LangGraph ReAct loop around any backend that
+satisfies the ``send_command(code: str) -> str`` protocol (``MockTclRepl``,
+``EDAInteractive``, ``PythonInteractive``, etc.).
 
-Use ``LangGraphAgent`` from :mod:`edai.agent.graph` for the full graph-based
-agent; this module exists for backward compatibility and tests.
+Role & backend descriptions are loaded from ``roles/agents/{role}.md`` and
+``roles/backends/{type}.md`` files — no hardcoded system prompts.
 """
 
 from __future__ import annotations
 
-import asyncio
+import importlib.resources
+import os
+from collections.abc import AsyncGenerator, Generator
 from typing import Any
 
+from langchain.tools import tool
+from langchain_deepseek import ChatDeepSeek
+from langgraph.prebuilt import create_react_agent
+
+from edai.agent.config import AgentConfig
 from edai.core.Message import Message
 
-# Keyword → Tcl command mapping (mirrors graph.py for consistency)
-_TRANSLATIONS: list[tuple[list[str], str]] = [
-    (
-        ["place all", "place design", "run placement", "place the design"],
-        "place_design",
-    ),
-    (
-        ["route all", "route design", "run routing", "route the design"],
-        "route_design",
-    ),
-    (["timing", "report timing", "show timing"], "report_timing"),
-    (["get cells", "list cells", "show cells", "what cells"], "get_cells"),
-    (["get nets", "list nets", "show nets"], "get_nets"),
-    (["get pins", "list pins", "show pins", "what pins"], "get_pins"),
-    (["help", "what can you do", "commands", "?"], "help"),
-]
+
+# ── role / backend doc helpers ─────────────────────────────────────────
+
+
+def _load_md(package: str, *path_segments: str) -> str:
+    """Read a markdown file from the package's resources.
+
+    Returns an empty string if the file does not exist.
+    """
+    try:
+        return importlib.resources.files(package).joinpath(
+            *path_segments
+        ).read_text(encoding="utf-8")
+    except (FileNotFoundError, ModuleNotFoundError):
+        return ""
+
+
+# ── the Agent ──────────────────────────────────────────────────────────
 
 
 class Agent:
-    """Mock natural-language → Tcl translator.
-
-    Performs keyword matching instead of a real LLM call.  Maintains a
-    conversation history as ``list[Message]``.
+    """ReAct agent for EDA / Python backends.
 
     Parameters
     ----------
-    engine:
-        Optional TclEngine.  When provided, recognised commands are
-        executed immediately.
+    backend:
+        Any object that satisfies ``send_command(code: str) -> str``.
+        Must expose a ``backend_type`` class attribute (``"mock"``,
+        ``"tclsh"``, ``"python"``, …) used to load the capabilities doc.
+    role:
+        Agent role name.  Loads ``roles/agents/{role}.md`` as the
+        system prompt.
+    model:
+        LLM model identifier.  Falls back to ``LLM_MODEL`` env var,
+        then ``"deepseek-v4-flash"``.
+    max_iterations:
+        Maximum ReAct loop iterations before giving up.
 
+    Usage::
+
+        from edai.agent import Agent
+        from edai.core.mock_repl import MockTclRepl
+
+        agent = Agent(backend=MockTclRepl(), role="EDAI")
+        result = await agent.run("list all cells")
     """
 
-    def __init__(self, engine: Any = None) -> None:  # noqa: ANN401
-        self._engine = engine
-        self._delay: float = 0.3
-
-        # Conversation history — list[Message]
-        self._messages: list[Message] = [
-            Message.system(
-                "You are an EDA assistant that translates natural language "
-                "into Tcl commands."
-            ),
-        ]
-
-    # ── public API ─────────────────────────────────────────────────
-
-    async def translate(
+    def __init__(
         self,
-        text: str,
+        backend: Any,
+        role: str = "EDAI",
         *,
-        context: dict | str | None = None,  # noqa: ARG002
-    ) -> str:
-        """Translate natural-language *text* into a Tcl command.
+        model: str = "",
+        max_iterations: int = 10,
+    ) -> None:
+        self.backend = backend
+        self._role = role
+        self._config = AgentConfig(
+            model=model or os.environ.get("LLM_MODEL", "deepseek-v4-flash"),
+            max_iterations=max_iterations,
+        )
+        self.graph: Any = self._build_graph()
 
-        Parameters
-        ----------
-        text:
-            User input.
-        context:
-            Ignored by the mock (accepts for API compatibility).
+    # ── prompt construction ─────────────────────────────────────────
 
-        Returns
-        -------
-        str
-            The matched Tcl command, or ``# (unrecognized) ...``.
+    def _build_system_prompt(self) -> str:
+        """Combine agent role + backend capabilities into one system prompt."""
+        parts: list[str] = []
 
+        # Agent role doc
+        role_md = _load_md("edai.roles", "agents", f"{self._role}.md")
+        if role_md:
+            parts.append(role_md)
+
+        # Backend capabilities doc
+        bt = getattr(self.backend, "backend_type", "tclsh")
+        backend_md = _load_md("edai.roles", "backends", f"{bt}.md")
+        if backend_md:
+            parts.append("\n## Available Backend\n")
+            parts.append(backend_md)
+
+        return "\n\n".join(parts)
+
+    # ── graph construction ──────────────────────────────────────────
+
+    def _build_graph(self) -> Any:
+        """Build a ReAct graph: LLM + single ``execute`` tool."""
+        raw_key = os.environ.get("LLM_API_KEY", "")
+        if not raw_key:
+            raw_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        base_url = os.environ.get(
+            "LLM_BASE_URL", "https://api.deepseek.com/v1"
+        )
+
+        llm = ChatDeepSeek(
+            model=self._config.model,
+            temperature=0.1,
+            api_key=raw_key,  # type: ignore[arg-type]
+            base_url=base_url,
+        )
+
+        backend = self.backend
+
+        @tool
+        def execute(command: str) -> str:
+            """Send a command to the backend and return the result.
+
+            Use this tool to run any backend command.
+            The available commands depend on the connected backend.
+            """
+            return backend.send_command(command)
+
+        system_prompt = self._build_system_prompt()
+        return create_react_agent(llm, [execute], prompt=system_prompt, version="v2")
+
+    # ── public API ──────────────────────────────────────────────────
+
+    async def run(self, text: str) -> str:
+        """Process *text* through the ReAct graph and return the final answer."""
+        from langchain_core.messages import HumanMessage
+
+        state = await self.graph.ainvoke(
+            {"messages": [HumanMessage(content=text)]},
+            {"recursion_limit": self._config.max_iterations + 1},
+        )
+        messages = state.get("messages", [])
+        return str(messages[-1].content) if messages else ""
+
+    def run_sync(self, text: str) -> str:
+        """Synchronous wrapper for :meth:`run`."""
+        import asyncio
+
+        return asyncio.run(self.run(text))
+
+    # ── streaming ───────────────────────────────────────────────────
+
+    async def run_stream(self, text: str) -> AsyncGenerator[tuple[str, str], None]:
+        """Async generator yielding ``(type, content)`` events.
+
+        Event types
+        -----------
+        ``"tool_call"``
+            Agent is about to call a tool.
+        ``"tool_result"``
+            Output returned from tool execution.
+        ``"token"``
+            A chunk of agent response text.
+        ``"error"``
+            An error occurred.
+        ``"done"``
+            Streaming complete.
         """
-        if self._delay > 0:
-            await asyncio.sleep(self._delay)
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-        user_msg = Message.human(text)
-        self._messages.append(user_msg)
+        seen_count = 0
 
-        tcl = self._mock_translate(text)
+        try:
+            async for state in self.graph.astream(
+                {"messages": [HumanMessage(content=text)]},
+                {"recursion_limit": self._config.max_iterations + 1},
+            ):
+                for _node_name, snapshot in state.items():
+                    step_msgs = snapshot.get("messages", [])
+                    for i in range(seen_count, len(step_msgs)):
+                        msg = step_msgs[i]
 
-        ai_msg = Message.ai(f"Running: {tcl}")
-        self._messages.append(ai_msg)
+                        if isinstance(msg, ToolMessage):
+                            yield ("tool_result", str(msg.content))
+                        elif isinstance(msg, AIMessage):
+                            tool_calls = getattr(msg, "tool_calls", [])
+                            if tool_calls:
+                                for tc in tool_calls:
+                                    name = tc.get("name", "execute")
+                                    yield ("tool_call", name)
+                            content = str(msg.content) if msg.content else ""
+                            if content:
+                                yield ("token", content)
 
-        return tcl
+                    seen_count = len(step_msgs)
 
-    def translate_sync(
-        self,
-        text: str,
-        *,
-        context: dict | str | None = None,
-    ) -> str:
-        """Wrap :meth:`translate` as a synchronous call."""
-        return asyncio.run(self.translate(text, context=context))
+        except Exception as exc:  # noqa: BLE001
+            yield ("error", str(exc))
 
-    # ── simulated delay ────────────────────────────────────────────
+        yield ("done", "")
 
-    @property
-    def delay(self) -> float:
-        """Simulated latency in seconds (applied before each translation)."""
-        return self._delay
+    def run_stream_sync(
+        self, text: str
+    ) -> Generator[tuple[str, str], None, None]:
+        """Synchronous wrapper for :meth:`run_stream`."""
+        import asyncio
 
-    @delay.setter
-    def delay(self, value: float) -> None:
-        self._delay = max(0.0, value)
+        gen = self.run_stream(text)
+        while True:
+            try:
+                val: tuple[str, str] = asyncio.run(gen.asend(None))  # type: ignore[func-returns-value]
+                yield val
+            except StopAsyncIteration:
+                break
 
-    # ── message-history accessors ──────────────────────────────────
+    # ── backward-compat aliases ─────────────────────────────────────
+
+    async def translate(self, text: str) -> str:
+        """Alias for :meth:`run`."""
+        return await self.run(text)
+
+    def translate_sync(self, text: str) -> str:
+        """Alias for :meth:`run_sync`."""
+        return self.run_sync(text)
 
     @property
     def messages(self) -> list[Message]:
-        """Read-only conversation history."""
-        return list(self._messages)
+        """Backward-compat: return empty list (state lives in the graph)."""
+        return []
 
     def clear_history(self) -> None:
-        """Reset the conversation, keeping only the initial system message."""
-        self._messages = [self._messages[0]]
+        """Backward-compat no-op."""
 
-    # ── internal helpers ───────────────────────────────────────────
+    @property
+    def delay(self) -> float:
+        """Backward-compat: always 0 (no mock mode)."""
+        return 0.0
 
-    @staticmethod
-    def _mock_translate(text: str) -> str:
-        """Run keyword match and return the Tcl command."""
-        text_lower = text.lower().strip()
-        for keywords, tcl_cmd in _TRANSLATIONS:
-            if any(kw in text_lower for kw in keywords):
-                return tcl_cmd
-        return f"# (unrecognized) {text.strip()}"
+    @delay.setter
+    def delay(self, value: float) -> None:
+        """Backward-compat no-op."""

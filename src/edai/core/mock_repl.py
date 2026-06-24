@@ -113,6 +113,9 @@ class MockTclRepl:
 
     """
 
+    backend_type = "mock"
+    """Identifier for backend MD docs (``roles/backends/mock.md``)."""
+
     def __init__(
         self,
         engine: MockTclEngine | None = None,

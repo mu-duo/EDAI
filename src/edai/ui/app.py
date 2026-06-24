@@ -1,21 +1,15 @@
-"""Simplified TUI — Tcl wrapper with ReAct agent dispatch and mock fallback.
+"""Simplified TUI — backend wrapper with ReAct agent dispatch.
 
 On Enter:
-* If the input is a registered Tcl command → execute directly via backend.
-* Otherwise → pass to the ReAct agent which decides whether to call the
-  Tcl tool (via function calling) or respond with text.
+* If the input is a recognisable backend command → execute directly via backend.
+* Otherwise → pass to the ReAct agent which understands intent and calls
+  the ``execute`` tool as needed.
 
 Backend selection:
 * ``--mock`` flag → in-memory ``MockTclRepl`` simulation.
 * ``--path`` / ``-p`` → real ``EDAInteractive`` subprocess at the given binary.
 * ``tclsh`` on ``PATH`` → real ``EDAInteractive`` subprocess.
 * No backend found → in-memory ``MockTclRepl`` simulation (fallback).
-
-Agent mode
-----------
-By default the ``LangGraphAgent`` runs in ReAct mode using ``ChatDeepSeek``
-with a Tcl execution tool.  Set ``LLM_MODEL=mock`` to fall back to the
-legacy keyword-matching graph (no LLM required).
 
 Streaming
 ---------
@@ -28,7 +22,6 @@ committed to the ``RichLog`` conversation log in italic style.
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Protocol
 
 from rich.rule import Rule
@@ -37,8 +30,7 @@ from textual.binding import Binding
 from textual.containers import HorizontalGroup, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
-from edai.agent.config import AgentConfig
-from edai.agent.graph import LangGraphAgent
+from edai.agent import Agent
 from edai.core.backend_config import BackendConfig, create_backend
 from edai.core.Message import Message, MessageRole
 
@@ -57,15 +49,6 @@ class TclBackend(Protocol):
     prompt: str
 
     def send_command(self, code: str) -> str: ...
-
-
-# ── 模型选择 ──────────────────────────────────────────────────────────
-
-_DEFAULT_MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
-"""ReAct 代理使用的模型标识。
-
-设为 ``mock`` 则使用传统的关键词匹配图（无需 API key）.
-"""
 
 
 class EdaiApp(App[None]):
@@ -99,23 +82,7 @@ class EdaiApp(App[None]):
         super().__init__()
         self._interactive = create_backend(config)
 
-        # 默认使用真实模型；LLM_MODEL=mock 或无 API key 时回退到关键词匹配。
-        model = _DEFAULT_MODEL
-        if model == "mock":
-            agent_config = AgentConfig(model="mock")
-        else:
-            agent_config = AgentConfig(
-                model=model,
-                system_prompt=(
-                    "You are an EDA assistant. Convert the user's natural-language "
-                    "request into Tcl commands. You have a Tcl execution tool "
-                    "available — use it to run commands and return results. "
-                    "When the user types a natural-language request, translate it "
-                    "into the appropriate Tcl command and execute it."
-                ),
-            )
-
-        self._agent = LangGraphAgent(config=agent_config, backend=self._interactive)
+        self._agent = Agent(backend=self._interactive, role="EDAI")
 
         # 规范对话历史——list[Message]
         self._conversation: list[Message] = []
@@ -203,6 +170,8 @@ class EdaiApp(App[None]):
                 self._interactive.send_command,
                 stripped,
             )
+
+            
             if self._check_tcl_response(response):
                 result_msg = Message.ai(response)
                 self._conversation.append(result_msg)
@@ -251,37 +220,6 @@ class EdaiApp(App[None]):
                 self._conversation.append(result_msg)
 
         self.app.run_worker(_stream_task(), exclusive=True)
-
-    # ── 同步分发（测试 / 外部调用用）─────────────────────────────────
-
-    def _dispatch(self, text: str) -> str:
-        """收集流式输出为单个字符串.
-
-        供测试和程序化调用使用。交互式 UI 请使用 :meth:`_run_worker_stream`。
-        """
-        stripped = text.strip()
-        if not stripped:
-            return ""
-
-        # 1. 尝试直接执行 Tcl 命令
-        response = self._interactive.send_command(stripped)
-        if self._check_tcl_response(response):
-            return response
-
-        # 2. 不是有效 Tcl——交给 ReAct 代理处理
-        try:
-            full_response = ""
-            for event_type, content in self._agent.run_stream_sync(stripped):
-                if event_type == "token":
-                    full_response += content
-                elif event_type == "error":
-                    return f"[red]Error: {content}[/red]"
-            if full_response:
-                return f"[bold green]Agent:[/] {full_response}"
-        except Exception as e:
-            return f"{response}\n[red]Agent error: {e}[/red]"
-
-        return response
 
     # ── 对话历史访问器 ────────────────────────────────────────────
 
