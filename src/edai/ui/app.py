@@ -311,7 +311,6 @@ class EdaiApp(App[None]):
             f"{' ' * 10} ███████╗██████╔╝██║  ██║████╗\n"
             f"{' ' * 10} ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═══╝[/]\n"
             "[bold yellow]                EDAI  version 0.1.0[/]\n"
-            "[white]             EDA Interactive Toolkit[/]\n"
             "\n"
             "[dim]  Tab ↹ focus     ⌃C quit    ⌃L clear[/]"
         )
