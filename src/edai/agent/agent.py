@@ -105,7 +105,13 @@ class Agent:
             # fallback to tclsh.md for unrecognised backends
             backend_md = _load_md("edai.roles", "backends", "tclsh.md")
         if backend_md:
-            parts.append("\n## Available Backend\n")
+            parts.append(f"## 当前后端：{bt}\n")
+            parts.append(
+                f"你当前连接的是 **{bt}** 后端。通过 `execute` 工具发送的**所有命令**"
+                f"必须使用 **{bt}** 的语法和命令约定。"
+                f"**禁止**使用其他 EDA 工具（如 dc_shell、Genus、Innovus、Vivado 等）"
+                f"的命令，除非用户明确要求切换到其他工具。"
+            )
             parts.append(backend_md)
 
         return "\n\n".join(parts)
@@ -129,6 +135,7 @@ class Agent:
         )
 
         backend = self.backend
+        bt = getattr(backend, "backend_type", "tclsh")
 
         @tool
         def execute(command: str) -> str:
@@ -138,6 +145,16 @@ class Agent:
             The available commands depend on the connected backend.
             """
             return backend.send_command(command)
+
+        # Dynamically anchor the tool description to the current backend
+        # so the agent always sees which tool it is connected to when
+        # deciding whether to call `execute`.
+        execute.description = (
+            f"Send a **{bt}** command to the backend and return the result.\n\n"
+            f"The connected backend is **{bt}**. "
+            f"All commands MUST follow {bt} syntax and conventions. "
+            f"Do NOT use commands from other EDA tools."
+        )
 
         system_prompt = self._build_system_prompt()
         return create_agent(
