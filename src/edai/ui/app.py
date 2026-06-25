@@ -22,6 +22,7 @@ committed to the ``RichLog`` conversation log in italic style.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Protocol
 
 from rich.align import Align
@@ -103,7 +104,9 @@ class EdaiApp(App[None]):
             auto_scroll=True,
         )
         self._stream_output = Static("", markup=True, id="stream-area")
-        self._input_text = Input(placeholder="Enter Tcl commands or natural language.\u2026")
+        self._input_text = Input(
+            placeholder="Enter Tcl commands or natural language.\u2026"
+        )
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
@@ -192,7 +195,9 @@ class EdaiApp(App[None]):
             return
 
         try:
-            result = special_registry.execute(cmd_name, self._interactive, self, cmd_args)
+            result = special_registry.execute(
+                cmd_name, self._interactive, self, cmd_args
+            )
         except CommandError as exc:
             result = str(exc)
         except SystemExit:
@@ -220,17 +225,36 @@ class EdaiApp(App[None]):
         if not response:
             return True
 
-        # Tcl 交互式 shell 的错误响应通常以 "invalid command name" 或 "can't read" 开头
-        if response.startswith("invalid command name"):
+        # 后端通信错误（来自 send_command 的异常捕获）— 不是有效的 Tcl 结果
+        if response.startswith("Communication error:"):
             return False
-        elif response.startswith("can't read"):
+        if response.startswith("Failed to start"):
+            return False
+        if response.startswith("Tool closed"):
+            return False
+
+        # Tcl 交互式 shell 的错误响应（invalid command name / can't read）
+        if response.startswith("invalid command name") or response.startswith(
+            "can't read"
+        ):
             return False
 
         # RainaSynth 的错误响应格式通常为 "[Error-MODEL-xxx: ..."
-        if response.startswith("[Error"):
-            return False
+        return not response.startswith("[Error")
 
-        return True
+    # ── 自然语言检测 ───────────────────────────────────────────────
+
+    _CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]")
+    """匹配 CJK（中日韩）统一表意文字字符的正则表达式。"""
+
+    @staticmethod
+    def _looks_like_natural_language(text: str) -> bool:
+        """Check if input is natural language (contains CJK characters).
+
+        When CJK characters are detected the input is treated as NL
+        and routed directly to the ReAct agent.
+        """
+        return bool(EdaiApp._CJK_RE.search(text))
 
     # ── 流式工作器 ─────────────────────────────────────────────────
 
@@ -240,21 +264,23 @@ class EdaiApp(App[None]):
         async def _stream_task() -> None:
             stripped = text.strip()
 
-            # --- 快速路径：直接将输入作为 Tcl 命令执行 --------------------------
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(
-                None,
-                self._interactive.send_command,
-                stripped,
-            )
+            # --- 快速路径：将 Tcl 命令直接发送至后端执行 -----------------------
+            # 自然语言输入（包含中文等）不尝试直接执行，避免编码错误。
+            if not self._looks_like_natural_language(stripped):
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    self._interactive.send_command,
+                    stripped,
+                )
 
-            if self._check_tcl_response(response):
-                debug_print(f"Direct repl execution: {stripped} → {response}")
-                result_msg = Message.tool(response)
-                self._conversation.append(result_msg)
-                self._agent.record_command(stripped, response)
-                self._output.write(response)
-                return
+                if self._check_tcl_response(response):
+                    debug_print(f"Direct repl execution: {stripped} → {response}")
+                    result_msg = Message.tool(response)
+                    self._conversation.append(result_msg)
+                    self._agent.record_command(stripped, response)
+                    self._output.write(response)
+                    return
 
             # --- 代理路径：从 ReAct 代理流式读取结果 -----------------------------
             debug_print(f"Dispatching to ReAct agent: {stripped}")
@@ -266,10 +292,14 @@ class EdaiApp(App[None]):
                     if event_type == "token":
                         full_response += content
                         self._stream_output.update(
-                            f"[italic]{full_response}[/italic]" if full_response else _STREAM_PLACEHOLDER,
+                            f"[italic]{full_response}[/italic]"
+                            if full_response
+                            else _STREAM_PLACEHOLDER,
                         )
                     elif event_type == "tool_call":
-                        self._output.write(f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]")
+                        self._output.write(
+                            f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]"
+                        )
                     elif event_type == "tool_result":
                         if content.strip():
                             self._output.write(f"[dim]  └─ {content.strip()}[/]")
@@ -288,7 +318,9 @@ class EdaiApp(App[None]):
             self._stream_output.update("")
 
             if full_response:
-                self._output.write(f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]")
+                self._output.write(
+                    f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]"
+                )
                 result_msg = Message.ai(full_response)
                 self._conversation.append(result_msg)
 

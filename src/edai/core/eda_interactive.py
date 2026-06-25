@@ -13,6 +13,8 @@ import pexpect
 import rich
 from rich.markup import escape
 
+from edai.core.debug import debug_print
+
 
 class EDAInteractive:
     """Manage a persistent interactive EDA tool subprocess.
@@ -74,22 +76,28 @@ class EDAInteractive:
         except Exception as exc:  # noqa: BLE001
             return f"Failed to start EDA tool: {exc}"
 
-        # Split into lines and send each with \r (CR) instead of \n (LF).
-        # Many EDA tools (dc_shell, etc.) operate in raw mode where CR is
-        # needed to trigger line processing via gets/read.
+        # Split into lines and send each with \r\n (CR+LF).
+        # \r triggers line processing in raw-mode EDA tools (dc_shell, etc.);
+        # \n after it ensures pexpect's pipe buffer accumulates properly
+        # (without \n, the pipe may split at \r and truncate child.before).
         lines = code.split("\n")
         output_parts: list[str] = []
 
         try:
             for line in lines:
-                child.send(line + "\r")
+                child.send(line + "\r\n")
 
             # Loop until prompt/EOF/timeout, accumulating output across
             # --More-- pages.
             while True:
                 # Build expect candidates every iteration (prompt order can't
                 # change, but we keep it DRY via a local).
-                expect_items = [self.prompt, pexpect.EOF, pexpect.TIMEOUT]
+                # Prepend \n so the prompt only matches at line start;
+                # this prevents linenoise's refreshLine() from triggering a
+                # premature match (refreshLine outputs \r then <prompt>,
+                # not \n then <prompt>, so it won't match here).
+                prompt_pattern = f"\n{self.prompt.lstrip('^')}"
+                expect_items = [prompt_pattern, pexpect.EOF, pexpect.TIMEOUT]
                 more_index = None
                 if self.more_pattern is not None:
                     more_index = len(expect_items)
@@ -130,6 +138,7 @@ class EDAInteractive:
         except Exception as exc:  # noqa: BLE001
             return f"Communication error: {exc}"
 
+        debug_print(f"raw output: {output_parts}")
         joined = "".join(output_parts)
         return self._clean_output(joined, code)
 
@@ -148,8 +157,8 @@ class EDAInteractive:
 
         # Direct child interaction — do NOT use send_command() which would
         # wait for the *old* prompt pattern that is no longer produced.
-        # Use \r to be consistent with send_command (EDA tools in raw mode).
-        child.send(f'set tcl_prompt1 {{puts -nonewline "{prompt}"}}{chr(13)}')
+        # Use \r\n to be consistent with send_command (EDA tools in raw mode).
+        child.send(f'set tcl_prompt1 {{puts -nonewline "{prompt}"}}\r\n')
         child.expect(prompt, timeout=30)  # cmd echo
         child.expect(prompt, timeout=30)  # wait for new prompt
         self.prompt = prompt
@@ -174,8 +183,13 @@ class EDAInteractive:
             self.tool_args,
             timeout=self.timeout,
             encoding="utf-8",
+            codec_errors="replace",
             echo=False,
         )
+        # Set wide terminal (4096 cols) so linenoise never wraps long
+        # command lines and never calls refreshLine(), which would output
+        # the prompt text early and cause pexpect to match prematurely.
+        self._child.setwinsize(24, 4096)
         # Wait for the initial prompt (always use the saved initial prompt,
         # since self.prompt may have been changed by set_prompt)
         self._child.expect(self._initial_prompt, timeout=30)
@@ -183,26 +197,40 @@ class EDAInteractive:
 
     @staticmethod
     def _clean_output(raw: str, sent: str) -> str:
-        """Strip echoed command and trailing blank lines from output.
+        r"""Strip echoed command and empty lines from output.
 
-        For multi-line commands the EDA tool typically echoes only the
-        first line — this method removes any line that exactly matches
-        ``sent``'s first line (trimmed).
+        Normalises ``\r\n`` to ``\n``, then for each line handles lone
+        ``\r`` by keeping only the final visible state (the segment after
+        the last ``\r`` — terminal cursor-back semantics).  Removes lines
+        that start with the sent command's first line (or exactly match
+        its first word) and drops blank lines.
         """
-        first_line = sent.split("\n", 1)[0].strip()
-        lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-        # Remove echo line (the first occurrence of the sent first line)
-        filtered: list[str] = []
-        echo_removed = False
-        for ln in lines:
-            if not echo_removed and ln.strip() == first_line:
-                echo_removed = True
-                continue
-            filtered.append(ln)
-        # Remove trailing blank lines
-        while filtered and not filtered[-1].strip():
-            filtered.pop()
-        return "\n".join(filtered).strip()
+        first_cmd_line = sent.split("\n", 1)[0].strip()
+        first_word = first_cmd_line.split()[0] if first_cmd_line else ""
+        if not first_cmd_line:
+            return raw.strip()
+
+        # Normalize \r\n to \n (Windows line endings), but keep lone \r
+        # which is a cursor-back — take only the text after the last \r.
+        text = raw.replace("\r\n", "\n")
+        processed: list[str] = []
+        for line in text.split("\n"):
+            if "\r" in line:
+                # Terminal cursor-back: content after \r overwrites from
+                # position 0.  The last \r-segment is the final visible
+                # state of this virtual line.
+                processed.append(line.split("\r")[-1])
+            else:
+                processed.append(line)
+
+        clean = [
+            ln
+            for ln in processed
+            if ln.strip()
+            and not ln.strip().startswith(first_cmd_line)
+            and ln.strip() != first_word
+        ]
+        return "\n".join(clean)
 
     def _echo(self, code: str) -> None:
         """Print the command to the console with a tool prefix."""
