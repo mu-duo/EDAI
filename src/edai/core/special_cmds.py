@@ -351,3 +351,30 @@ def _cmd_history(
         lines.append(f"  {idx:>3}. {style}{role_label}:[/] {content}")
 
     return "\n".join(lines)
+
+
+@special_command(
+    name="agent_info",
+    description="Display agent system prompt and metadata",
+)
+def _cmd_agent_info(
+    engine: Any,
+    repl: Any,
+    args: list[str],  # noqa: ARG001
+) -> str | None:
+    """Show the current agent's system prompt and configuration in a modal."""
+    agent = getattr(repl, "_agent", None)
+    if agent is None:
+        return "Agent info not available in this context."
+
+    from edai.ui.agent_info_screen import AgentInfoScreen
+
+    metadata = {
+        "role": getattr(agent, "role", "?"),
+        "model": agent.config.model,
+        "max_iterations": str(agent.config.max_iterations),
+        "backend_type": getattr(agent, "backend_type", "?"),
+    }
+
+    repl.push_screen(AgentInfoScreen(agent.system_prompt, metadata))
+    return None

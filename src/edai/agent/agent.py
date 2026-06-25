@@ -83,9 +83,19 @@ class Agent:
             model=model or os.environ.get("LLM_MODEL", "deepseek-v4-flash"),
             max_iterations=max_iterations,
         )
+        # Build and cache the system prompt as a public attribute
+        self.system_prompt = self._build_system_prompt()
+        # Expose role and backend type publicly
+        self.role = role
+        self.backend_type = getattr(backend, "backend_type", "tclsh")
         self.graph: Any = self._build_graph()
         # Conversation history (langchain messages) — persists across calls
         self._messages: list = []
+
+    @property
+    def config(self) -> AgentConfig:
+        """Public accessor for agent configuration."""
+        return self._config
 
     # ── prompt construction ─────────────────────────────────────────
 
