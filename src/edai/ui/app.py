@@ -103,9 +103,7 @@ class EdaiApp(App[None]):
             auto_scroll=True,
         )
         self._stream_output = Static("", markup=True, id="stream-area")
-        self._input_text = Input(
-            placeholder="Enter Tcl commands or natural language.\u2026"
-        )
+        self._input_text = Input(placeholder="Enter Tcl commands or natural language.\u2026")
         with Vertical():
             yield Header(show_clock=True)
             yield self._output
@@ -194,9 +192,7 @@ class EdaiApp(App[None]):
             return
 
         try:
-            result = special_registry.execute(
-                cmd_name, self._interactive, self, cmd_args
-            )
+            result = special_registry.execute(cmd_name, self._interactive, self, cmd_args)
         except CommandError as exc:
             result = str(exc)
         except SystemExit:
@@ -223,9 +219,18 @@ class EdaiApp(App[None]):
         """检查响应是否为有效的 Tcl 命令执行结果."""
         if not response:
             return True
+
+        # Tcl 交互式 shell 的错误响应通常以 "invalid command name" 或 "can't read" 开头
         if response.startswith("invalid command name"):
             return False
-        return not response.startswith("can't read")
+        elif response.startswith("can't read"):
+            return False
+
+        # RainaSynth 的错误响应格式通常为 "[Error-MODEL-xxx: ..."
+        if response.startswith("[Error"):
+            return False
+
+        return True
 
     # ── 流式工作器 ─────────────────────────────────────────────────
 
@@ -260,14 +265,10 @@ class EdaiApp(App[None]):
                     if event_type == "token":
                         full_response += content
                         self._stream_output.update(
-                            f"[italic]{full_response}[/italic]"
-                            if full_response
-                            else _STREAM_PLACEHOLDER,
+                            f"[italic]{full_response}[/italic]" if full_response else _STREAM_PLACEHOLDER,
                         )
                     elif event_type == "tool_call":
-                        self._output.write(
-                            f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]"
-                        )
+                        self._output.write(f"[dim]⚡ 调用工具: [italic]{content}[/italic][/]")
                     elif event_type == "tool_result":
                         if content.strip():
                             self._output.write(f"[dim]  └─ {content.strip()}[/]")
@@ -286,9 +287,7 @@ class EdaiApp(App[None]):
             self._stream_output.update("")
 
             if full_response:
-                self._output.write(
-                    f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]"
-                )
+                self._output.write(f"[bold green][italic]Agent:[/][/] [italic]{full_response}[/italic]")
                 result_msg = Message.ai(full_response)
                 self._conversation.append(result_msg)
 
@@ -326,9 +325,7 @@ class EdaiApp(App[None]):
         author = Text("author: tanlinfeng", style="dim")
         help_text = Text("Tab ↹ focus     ⌃C quit    ⌃L clear", style="dim")
 
-        self._output.write(
-            Align.center(logo, vertical="middle")
-        )
+        self._output.write(Align.center(logo, vertical="middle"))
         self._output.write(Align.center(version, vertical="middle"))
         self._output.write(Align.center(author, vertical="middle"))
         self._output.write(Align.center(help_text, vertical="middle"))
