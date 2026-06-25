@@ -101,6 +101,9 @@ class Agent:
         # Backend capabilities doc
         bt = getattr(self.backend, "backend_type", "tclsh")
         backend_md = _load_md("edai.roles", "backends", f"{bt}.md")
+        if not backend_md:
+            # fallback to tclsh.md for unrecognised backends
+            backend_md = _load_md("edai.roles", "backends", "tclsh.md")
         if backend_md:
             parts.append("\n## Available Backend\n")
             parts.append(backend_md)

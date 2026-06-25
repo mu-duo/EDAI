@@ -10,15 +10,16 @@ from typing import Any
 
 from edai.core.debug import set_debug
 
-# ── prompt inference map ──────────────────────────────────────────
+# ── shared backend info map ───────────────────────────────────────
+# Used by both create_backend() and the prompt/MORE inference helpers.
 
-_TOOL_PROMPTS: dict[str, str] = {
-    "dc_shell": r"dc_shell> ",
-    "innovus": r"innovus> ",
-    "genus": r"genus> ",
-    "vivado": r"vivado% ",
-    "tclsh": r"% ",
-    "RainaSynth": r"RainaSynth>> ",
+BACKEND_INFO: dict[str, dict[str, str]] = {
+    "dc_shell":   {"prompt": r"dc_shell> ",        "type": "dc_shell"},
+    "innovus":    {"prompt": r"innovus> ",          "type": "innovus"},
+    "genus":      {"prompt": r"genus> ",            "type": "genus"},
+    "vivado":     {"prompt": r"vivado% ",           "type": "vivado"},
+    "tclsh":      {"prompt": r"% ",                 "type": "tclsh"},
+    "RainaSynth": {"prompt": r"RainaSynth>> ",      "type": "RainaSynth"},
 }
 
 # ── more-prompt inference map ─────────────────────────────────────
@@ -28,6 +29,18 @@ _TOOL_MORE: dict[str, str | None] = {
     "RainaSynth": None,  # no pager
     # tools not listed default to r"--More--" (dc_shell, innovus, etc.)
 }
+
+
+def _infer_backend_type(bin_path: str) -> str:
+    """Infer the ``backend_type`` identifier from a tool binary path.
+
+    Strips directory and ``.exe`` suffix, then looks up the shared
+    :data:`BACKEND_INFO` mapping.  Falls back to ``"tclsh"`` for
+    unrecognised binaries (case-sensitive match).
+    """
+    name = Path(bin_path).stem
+    info = BACKEND_INFO.get(name)
+    return info["type"] if info else "tclsh"
 
 
 def _infer_more(bin_path: str) -> str | None:
@@ -43,11 +56,13 @@ def _infer_more(bin_path: str) -> str | None:
 def _infer_prompt(bin_path: str) -> str:
     """Infer the prompt pattern from the tool binary name.
 
-    Strips directory and ``.exe`` suffix, then looks up the mapping.
-    Falls back to ``tclsh``-style ``%`` prompt.
+    Strips directory and ``.exe`` suffix, then looks up the shared
+    :data:`BACKEND_INFO` mapping.  Falls back to ``tclsh``-style
+    ``%`` prompt for unrecognised binaries.
     """
-    name = Path(bin_path).stem  # strip directory and .exe
-    return _TOOL_PROMPTS.get(name, r"% ")
+    name = Path(bin_path).stem
+    info = BACKEND_INFO.get(name)
+    return info["prompt"] if info else r"% "
 
 
 # ── config dataclass ──────────────────────────────────────────────
@@ -138,10 +153,15 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         more = (
             cfg.more_pattern if cfg.more_pattern is not None else _infer_more(cfg.path)
         )
+        backend_type = _infer_backend_type(cfg.path)
         from edai.core.eda_interactive import EDAInteractive
 
         backend = EDAInteractive(
-            bin_path=cfg.path, prompt=prompt, timeout=300, more_pattern=more
+            bin_path=cfg.path,
+            prompt=prompt,
+            timeout=300,
+            more_pattern=more,
+            backend_type=backend_type,
         )
         backend.verbose = cfg.verbose
         print(f"Connected to EDA tool: {cfg.path}")
@@ -152,10 +172,15 @@ def create_backend(config: BackendConfig | None = None) -> Any:
     if tclsh:
         prompt = cfg.prompt if cfg.prompt is not None else _infer_prompt(tclsh)
         more = cfg.more_pattern if cfg.more_pattern is not None else _infer_more(tclsh)
+        backend_type = _infer_backend_type(tclsh)
         from edai.core.eda_interactive import EDAInteractive
 
         backend = EDAInteractive(
-            bin_path=tclsh, prompt=prompt, timeout=300, more_pattern=more
+            bin_path=tclsh,
+            prompt=prompt,
+            timeout=300,
+            more_pattern=more,
+            backend_type=backend_type,
         )
         backend.verbose = cfg.verbose
         print(f"Connected to Tcl shell: {tclsh}")

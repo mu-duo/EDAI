@@ -40,9 +40,6 @@ class EDAInteractive:
 
     """
 
-    backend_type = "tclsh"
-    """Identifier for backend MD docs (``roles/backends/tclsh.md``)."""
-
     def __init__(
         self,
         bin_path: str,
@@ -50,6 +47,7 @@ class EDAInteractive:
         prompt: str = r"\% ",
         timeout: int = 300,
         more_pattern: str | None = r"--More--",
+        backend_type: str = "tclsh",
     ) -> None:
         self.bin_path = bin_path
         self.tool_args = tool_args or []
@@ -57,6 +55,8 @@ class EDAInteractive:
         self._initial_prompt = prompt  # saved for respawn detection
         self.timeout = timeout
         self.more_pattern = more_pattern
+        self.backend_type = backend_type
+        """Identifier for backend MD docs (e.g. ``"dc_shell"``, ``"tclsh"``)."""
 
         self._child: pexpect.spawn | None = None
 
