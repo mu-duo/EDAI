@@ -249,6 +249,7 @@ class EdaiApp(App[None]):
             )
 
             if self._check_tcl_response(response):
+                debug_print(f"Direct repl execution: {stripped} → {response}")
                 result_msg = Message.tool(response)
                 self._conversation.append(result_msg)
                 self._agent.record_command(stripped, response)
