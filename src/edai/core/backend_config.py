@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from edai.core.debug import set_debug
-
 
 # ── prompt inference map ──────────────────────────────────────────
 
@@ -18,9 +17,27 @@ _TOOL_PROMPTS: dict[str, str] = {
     "innovus": r"innovus> ",
     "genus": r"genus> ",
     "vivado": r"vivado% ",
-    "tclsh": r"\% ",
+    "tclsh": r"% ",
     "RainaSynth": r"RainaSynth>> ",
 }
+
+# ── more-prompt inference map ─────────────────────────────────────
+
+_TOOL_MORE: dict[str, str | None] = {
+    "tclsh": None,  # no pager
+    "RainaSynth": None,  # no pager
+    # tools not listed default to r"--More--" (dc_shell, innovus, etc.)
+}
+
+
+def _infer_more(bin_path: str) -> str | None:
+    """Infer the --More-- pattern from the tool binary name.
+
+    Returns ``None`` for tools known to have no pager, otherwise
+    defaults to the ``dc_shell``-style ``--More--`` pattern.
+    """
+    name = Path(bin_path).stem
+    return _TOOL_MORE.get(name, r"--More--")
 
 
 def _infer_prompt(bin_path: str) -> str:
@@ -30,7 +47,7 @@ def _infer_prompt(bin_path: str) -> str:
     Falls back to ``tclsh``-style ``%`` prompt.
     """
     name = Path(bin_path).stem  # strip directory and .exe
-    return _TOOL_PROMPTS.get(name, r"\% ")
+    return _TOOL_PROMPTS.get(name, r"% ")
 
 
 # ── config dataclass ──────────────────────────────────────────────
@@ -51,12 +68,14 @@ class BackendConfig:
     mock:
         Force the in-memory mock backend.  When *True* and *path* is
         also set, *path* is ignored and a warning is printed.
+
     """
 
     path: str | None = None
     prompt: str | None = None
     mock: bool = False
     verbose: bool = False
+    more_pattern: str | None = None
 
 
 # ── helpers ───────────────────────────────────────────────────────
@@ -116,9 +135,14 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         if not os.path.isfile(cfg.path):
             raise FileNotFoundError(f"EDA tool binary not found: {cfg.path}")
         prompt = cfg.prompt if cfg.prompt is not None else _infer_prompt(cfg.path)
+        more = (
+            cfg.more_pattern if cfg.more_pattern is not None else _infer_more(cfg.path)
+        )
         from edai.core.eda_interactive import EDAInteractive
 
-        backend = EDAInteractive(bin_path=cfg.path, prompt=prompt, timeout=300)
+        backend = EDAInteractive(
+            bin_path=cfg.path, prompt=prompt, timeout=300, more_pattern=more
+        )
         backend.verbose = cfg.verbose
         print(f"Connected to EDA tool: {cfg.path}")
         return backend
@@ -127,9 +151,12 @@ def create_backend(config: BackendConfig | None = None) -> Any:
     tclsh = _find_tclsh()
     if tclsh:
         prompt = cfg.prompt if cfg.prompt is not None else _infer_prompt(tclsh)
+        more = cfg.more_pattern if cfg.more_pattern is not None else _infer_more(tclsh)
         from edai.core.eda_interactive import EDAInteractive
 
-        backend = EDAInteractive(bin_path=tclsh, prompt=prompt, timeout=300)
+        backend = EDAInteractive(
+            bin_path=tclsh, prompt=prompt, timeout=300, more_pattern=more
+        )
         backend.verbose = cfg.verbose
         print(f"Connected to Tcl shell: {tclsh}")
         return backend

@@ -32,6 +32,9 @@ class EDAInteractive:
         Most EDA tools display ``% ``; override for ``dc_shell> `` etc.
     timeout:
         Seconds to wait for a command to complete.
+    more_pattern:
+        Pattern (regex string) for the pager prompt (e.g. ``--More--``).
+        Set to ``None`` to disable pager handling.
 
     """
 
@@ -44,12 +47,14 @@ class EDAInteractive:
         tool_args: list[str] | None = None,
         prompt: str = r"\% ",
         timeout: int = 300,
+        more_pattern: str | None = r"--More--",
     ) -> None:
         self.bin_path = bin_path
         self.tool_args = tool_args or []
         self.prompt = prompt
         self._initial_prompt = prompt  # saved for respawn detection
         self.timeout = timeout
+        self.more_pattern = more_pattern
 
         self._child: pexpect.spawn | None = None
 
@@ -69,33 +74,64 @@ class EDAInteractive:
         except Exception as exc:  # noqa: BLE001
             return f"Failed to start EDA tool: {exc}"
 
+        # Split into lines and send each with \r (CR) instead of \n (LF).
+        # Many EDA tools (dc_shell, etc.) operate in raw mode where CR is
+        # needed to trigger line processing via gets/read.
+        lines = code.split("\n")
+        output_parts: list[str] = []
+
         try:
-            child.sendline(code)
-            index = child.expect(
-                [self.prompt, pexpect.EOF, pexpect.TIMEOUT],
-                timeout=self.timeout,
-            )
+            for line in lines:
+                child.send(line + "\r")
+
+            # Loop until prompt/EOF/timeout, accumulating output across
+            # --More-- pages.
+            while True:
+                # Build expect candidates every iteration (prompt order can't
+                # change, but we keep it DRY via a local).
+                expect_items = [self.prompt, pexpect.EOF, pexpect.TIMEOUT]
+                more_index = None
+                if self.more_pattern is not None:
+                    more_index = len(expect_items)
+                    expect_items.insert(more_index, self.more_pattern)
+
+                idx = child.expect(expect_items, timeout=self.timeout)
+
+                raw = child.before or ""
+
+                if idx == 0:  # PROMPT
+                    output_parts.append(raw)
+                    break
+                elif more_index is not None and idx == more_index:  # --More--
+                    output_parts.append(raw)
+                    child.send(" ")
+                elif idx == 1:  # EOF — tool exited
+                    self._child = None
+                    output_parts.append(raw)
+                    joined = "".join(output_parts)
+                    output = self._clean_output(joined, code)
+                    return (
+                        f"Tool closed.\n{output}"
+                        if output
+                        else "Tool closed unexpectedly."
+                    )
+                else:  # TIMEOUT
+                    self._child = None
+                    output_parts.append(raw)
+                    if child.isalive():
+                        child.close(force=True)
+                    joined = "".join(output_parts)
+                    output = self._clean_output(joined, code)
+                    return (
+                        f"Command timed out ({self.timeout}s).\n{output}"
+                        if output
+                        else f"Command timed out ({self.timeout}s)."
+                    )
         except Exception as exc:  # noqa: BLE001
             return f"Communication error: {exc}"
 
-        raw = child.before or ""
-        output = self._clean_output(raw, code)
-
-        if index == 1:  # EOF — tool exited
-            self._child = None
-            return f"Tool closed.\n{output}" if output else "Tool closed unexpectedly."
-
-        if index == 2:  # TIMEOUT
-            self._child = None
-            if child.isalive():
-                child.close(force=True)
-            return (
-                f"Command timed out ({self.timeout}s).\n{output}"
-                if output
-                else f"Command timed out ({self.timeout}s)."
-            )
-
-        return output
+        joined = "".join(output_parts)
+        return self._clean_output(joined, code)
 
     def close(self) -> None:
         """Close the EDA tool subprocess if it is still alive."""
@@ -112,9 +148,10 @@ class EDAInteractive:
 
         # Direct child interaction — do NOT use send_command() which would
         # wait for the *old* prompt pattern that is no longer produced.
-        child.sendline(f'set tcl_prompt1 {{puts -nonewline "{prompt}"}}')
-        child.expect(prompt, timeout=30) # cmd echo
-        child.expect(prompt, timeout=30) # wait for new prompt
+        # Use \r to be consistent with send_command (EDA tools in raw mode).
+        child.send(f'set tcl_prompt1 {{puts -nonewline "{prompt}"}}{chr(13)}')
+        child.expect(prompt, timeout=30)  # cmd echo
+        child.expect(prompt, timeout=30)  # wait for new prompt
         self.prompt = prompt
         self._echo(f"Prompt updated to: {prompt}")
 
@@ -146,15 +183,26 @@ class EDAInteractive:
 
     @staticmethod
     def _clean_output(raw: str, sent: str) -> str:
-        """Strip echoed command and trailing whitespace from output."""
-        lines = raw.splitlines()
-        # First line is typically the echoed command — remove it
-        if lines and lines[0].strip() == sent.strip():
-            lines = lines[1:]
+        """Strip echoed command and trailing blank lines from output.
+
+        For multi-line commands the EDA tool typically echoes only the
+        first line — this method removes any line that exactly matches
+        ``sent``'s first line (trimmed).
+        """
+        first_line = sent.split("\n", 1)[0].strip()
+        lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        # Remove echo line (the first occurrence of the sent first line)
+        filtered: list[str] = []
+        echo_removed = False
+        for ln in lines:
+            if not echo_removed and ln.strip() == first_line:
+                echo_removed = True
+                continue
+            filtered.append(ln)
         # Remove trailing blank lines
-        while lines and not lines[-1].strip():
-            lines.pop()
-        return "\n".join(lines).strip()
+        while filtered and not filtered[-1].strip():
+            filtered.pop()
+        return "\n".join(filtered).strip()
 
     def _echo(self, code: str) -> None:
         """Print the command to the console with a tool prefix."""
