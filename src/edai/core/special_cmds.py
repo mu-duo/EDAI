@@ -378,3 +378,37 @@ def _cmd_agent_info(
 
     repl.push_screen(AgentInfoScreen(agent.system_prompt, metadata))
     return None
+
+
+@special_command(
+    name="env_info",
+    description="Display environment configuration (env.md)",
+)
+def _cmd_env_info(
+    engine: Any,
+    repl: Any,
+    args: list[str],  # noqa: ARG001
+) -> str | None:
+    """Show the merged environment configuration from env.md files."""
+    agent = getattr(repl, "_agent", None)
+    if agent is None:
+        return "Agent info not available in this context."
+
+    from edai.ui.agent_info_screen import AgentInfoScreen
+
+    env_prompt = getattr(agent, "env_prompt", "")
+    if not env_prompt:
+        return "No environment configuration found. Create env.md at:\n" \
+               "  /etc/.edai/env.md        (team level)\n" \
+               "  ~/.edai/env.md           (user level)\n" \
+               "  {cwd}/.edai/env.md       (project level)"
+
+    metadata = {
+        "role": "Environment Configuration",
+        "model": "—",
+        "max_iterations": "—",
+        "backend_type": "—",
+    }
+
+    repl.push_screen(AgentInfoScreen(env_prompt, metadata))
+    return None

@@ -38,6 +38,37 @@ def _load_md(package: str, *path_segments: str) -> str:
         return ""
 
 
+# ── env.md helpers ──────────────────────────────────────────────────────
+
+
+def _build_env_prompt() -> str:
+    """Read and merge env.md from team, user, and project levels.
+
+    Layers (lowest to highest priority):
+      1. ``/etc/.edai/env.md``  — team level
+      2. ``~/.edai/env.md``     — user level
+      3. ``{cwd}/.edai/env.md`` — project level
+
+    Each layer is appended after the previous one with a ``##`` header
+    identifying its source.  Missing files are silently skipped.
+    Returns an empty string if no env.md files exist.
+    """
+    layers = [
+        ("/etc/.edai/env.md", "## 团队环境 (Team)"),
+        (os.path.expanduser("~/.edai/env.md"), "## 个人环境 (User)"),
+        (os.path.join(os.getcwd(), ".edai/env.md"), "## 项目环境 (Project)"),
+    ]
+    parts: list[str] = []
+    for path, header in layers:
+        try:
+            content = open(path, encoding="utf-8").read().strip()
+        except (FileNotFoundError, PermissionError):
+            continue
+        if content:
+            parts.append(f"{header}\n\n{content}")
+    return "\n\n".join(parts)
+
+
 # ── the Agent ──────────────────────────────────────────────────────────
 
 
@@ -85,6 +116,8 @@ class Agent:
         )
         # Build and cache the system prompt as a public attribute
         self.system_prompt = self._build_system_prompt()
+        # Expose env prompt separately for /env_info
+        self.env_prompt = _build_env_prompt()
         # Expose role and backend type publicly
         self.role = role
         self.backend_type = getattr(backend, "backend_type", "tclsh")
@@ -100,13 +133,19 @@ class Agent:
     # ── prompt construction ─────────────────────────────────────────
 
     def _build_system_prompt(self) -> str:
-        """Combine agent role + backend capabilities into one system prompt."""
+        """Combine agent role + env + backend capabilities into one system prompt."""
         parts: list[str] = []
 
         # Agent role doc
         role_md = _load_md("edai.roles", "agents", f"{self._role}.md")
         if role_md:
             parts.append(role_md)
+
+        # Environment configuration (merged from team / user / project layers)
+        env_md = _build_env_prompt()
+        if env_md:
+            parts.append("## 环境配置\n")
+            parts.append(env_md)
 
         # Backend capabilities doc
         bt = getattr(self.backend, "backend_type", "tclsh")
