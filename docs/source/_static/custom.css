@@ -47,3 +47,13 @@
     border-color: #2980b9;
     cursor: default;
 }
+
+/* ── Print: hide navigation chrome ────────────────────────────────── */
+@media print {
+    .lang-switch-wrapper {
+        display: none !important;
+    }
+    div.related {
+        display: none !important;
+    }
+}
