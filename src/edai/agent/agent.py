@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import importlib.resources
 import os
+import subprocess
 from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 from typing import Any
 
 from langchain.agents import create_agent
@@ -205,10 +207,141 @@ class Agent:
             f"Do NOT use commands from other EDA tools."
         )
 
+        # ── workspace-scoped tools ────────────────────────────────────
+
+        workspace_root = Path.cwd().resolve()
+
+        @tool
+        def bash_executor(command: str) -> str:
+            """Execute a shell command in the workspace directory.
+
+            Run a single command via the system shell.  The working directory
+            is fixed to the workspace root.  Commands are limited to 60
+            seconds and output is truncated to 50 000 characters.
+            Do NOT run destructive commands (rm, force push, etc.) unless
+            the user explicitly requests it.
+            """
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(workspace_root),
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                stdout = result.stdout.strip()
+                stderr = result.stderr.strip()
+
+                output = stdout if stdout else ""
+                if stderr:
+                    output += f"\n[stderr]\n{stderr}" if output else stderr
+
+                if result.returncode != 0:
+                    prefix = f"Command failed (rc={result.returncode})"
+                    output = f"{prefix}\n{output}" if output else prefix
+
+                max_out = 50_000
+                if len(output) > max_out:
+                    output = (
+                        output[:max_out]
+                        + f"\n... (truncated, {len(output)} chars total)"
+                    )
+
+                return output if output else "(no output)"
+            except subprocess.TimeoutExpired:
+                return "Command timed out (60s)"
+            except Exception as exc:  # noqa: BLE001
+                return f"Command error: {exc}"
+
+        _WORKSPACE = str(workspace_root)
+        bash_executor.description = (
+            f"Execute a shell command in the workspace directory.\n\n"
+            f"Working directory: {_WORKSPACE}. "
+            f"Commands run via the system shell, limited to 60 seconds. "
+            f"Output is truncated at 50 000 characters. "
+            f"Do NOT run destructive commands unless the user explicitly asks."
+        )
+
+        @tool
+        def read(file: str, start: int = 1, end: int = -1) -> str:
+            """Read a file from the workspace with optional line range.
+
+            Read a file within the project workspace.  Supports 1-indexed
+            line ranges: *start* (default 1), *end* (default -1 = EOF).
+            Binary files and paths escaping the workspace are rejected.
+            """
+            try:
+                path = Path(file)
+                if not path.is_absolute():
+                    path = workspace_root / path
+                path = path.resolve()
+
+                # Security: must be inside workspace
+                try:
+                    path.relative_to(workspace_root)
+                except ValueError:
+                    return f"Access denied: {file} is outside the workspace"
+
+                # Symlink escape guard
+                if path.is_symlink():
+                    real = path.resolve()
+                    try:
+                        real.relative_to(workspace_root)
+                    except ValueError:
+                        return (
+                            f"Access denied: {file} is a symlink pointing "
+                            f"outside the workspace"
+                        )
+
+                if not path.is_file():
+                    return f"File not found: {file}"
+
+                # Binary guard
+                with open(path, "rb") as fh:
+                    chunk = fh.read(1024)
+                    if b"\x00" in chunk:
+                        return f"Cannot read binary file: {file}"
+
+                with open(path, encoding="utf-8") as fh:
+                    lines = fh.readlines()
+
+                total = len(lines)
+                if start < 1:
+                    start = 1
+                if end < 0 or end > total:
+                    end = total
+                if start > total:
+                    return f"Line {start} is beyond end of file ({total} lines)"
+
+                selected = lines[start - 1 : end]
+                width = len(str(end))
+                numbered = [
+                    f"{i:>{width}}: {line}" for i, line in enumerate(selected, start=start)
+                ]
+
+                rel = path.relative_to(workspace_root)
+                header = f"File: {rel} (lines {start}-{end} of {total})\n"
+                return header + "".join(numbered)
+
+            except UnicodeDecodeError:
+                return f"Cannot decode file as UTF-8: {file}"
+            except Exception as exc:  # noqa: BLE001
+                return f"Read error: {exc}"
+
+        read.description = (
+            f"Read a file from the workspace directory.\n\n"
+            f"Workspace root: {_WORKSPACE}. "
+            f"Accepts relative paths (resolved under workspace) or absolute paths "
+            f"(must stay inside workspace).  Supports 1-indexed line ranges: "
+            f"`start` (default 1), `end` (default -1 = read to EOF). "
+            f"Binary files are rejected with an error message."
+        )
+
         system_prompt = self._build_system_prompt()
         return create_agent(
             llm,
-            tools=[execute],
+            tools=[execute, bash_executor, read],
             system_prompt=system_prompt,
         )
 
