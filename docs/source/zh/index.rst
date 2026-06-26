@@ -7,7 +7,7 @@ EDAI — AI 驱动的 EDA 工具包
 设计人员可以直接输入 Tcl 命令，也可以用自然语言描述意图——内置的 LLM Agent
 会将其翻译为相应的后端指令并执行。
 
-.. image:: ../_static/edai-banner.png
+.. image:: /imgs/edai_banner.png
    :alt: EDAI Banner
    :width: 100 %
    :target: https://github.com/tanlinfeng/EDAI

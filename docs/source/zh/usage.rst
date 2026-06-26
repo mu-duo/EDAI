@@ -40,7 +40,7 @@ Textual TUI
 
 启动 EDAI 后会打开一个全屏 TUI，包含三个区域：
 
-.. image:: ../_static/edai-tui-layout.png
+.. image:: /imgs/edai_tui_layout.png
    :alt: EDAI TUI 布局
    :width: 100 %
 

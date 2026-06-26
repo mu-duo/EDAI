@@ -15,7 +15,7 @@ The name stands for **E**\ lectronic **D**\ esign **AI** — it is both the
 tool name and the vision: an AI-native interface to the semiconductor design
 flow.
 
-.. image:: _static/edai-session.png
+.. image:: imgs/edai_result.png
    :alt: EDAI TUI Session
    :width: 100 %
 
