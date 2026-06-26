@@ -78,9 +78,9 @@
    .. toctree::
       :maxdepth: 2
 
-      zh/overview
-      zh/usage
-      zh/architecture
+      overview_zh
+      usage_zh
+      architecture_zh
 
    索引与表格
    ==========

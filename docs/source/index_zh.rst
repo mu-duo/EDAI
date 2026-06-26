@@ -1,3 +1,5 @@
+:orphan:
+
 ============================================
 EDAI — AI 驱动的 EDA 工具包
 ============================================
@@ -29,9 +31,9 @@ EDAI — AI 驱动的 EDA 工具包
 .. toctree::
    :maxdepth: 2
 
-   overview
-   usage
-   architecture
+   overview_zh
+   usage_zh
+   architecture_zh
 
 索引与表格
 ==========

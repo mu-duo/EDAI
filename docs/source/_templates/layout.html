@@ -3,12 +3,12 @@
 
 {% block relbar1 %}
 <div class="lang-switch-wrapper">
-  {% if pagename.startswith('zh/') %}
-    <a href="../{{ pagename[3:] }}.html" class="lang-btn">EN</a>
+  {% if pagename.endswith('_zh') %}
+    <a href="{{ pagename | replace('_zh', '') }}.html" class="lang-btn">EN</a>
     <span class="lang-btn disabled">ZH</span>
   {% else %}
     <span class="lang-btn disabled">EN</span>
-    <a href="zh/{{ pagename }}.html" class="lang-btn">ZH</a>
+    <a href="{{ pagename }}_zh.html" class="lang-btn">ZH</a>
   {% endif %}
 </div>
 {{ super() }}

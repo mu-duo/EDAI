@@ -62,15 +62,15 @@ suppress_warnings = ["toc.excluded"]
 #   make singlehtml_zh   → passes -t language_zh
 if tags.has("language_en"):  # type: ignore[name-defined]
     exclude_patterns.extend([
-        "zh/overview.rst",
-        "zh/usage.rst",
-        "zh/architecture.rst",
-        "zh/index.rst",
+        "overview_zh.rst",
+        "usage_zh.rst",
+        "architecture_zh.rst",
+        "index_zh.rst",
     ])
 elif tags.has("language_zh"):  # type: ignore[name-defined]
     exclude_patterns.extend([
         "overview.rst",
         "usage.rst",
         "architecture.rst",
-        "zh/index.rst",
+        "index_zh.rst",
     ])
