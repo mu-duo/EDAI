@@ -41,7 +41,7 @@ Textual TUI
 
 When you start EDAI, a full-screen TUI opens with three areas:
 
-.. image:: ../_static/edai-tui-layout.png
+.. image:: _static/edai-tui-layout.png
    :alt: EDAI TUI Layout
    :width: 100 %
 

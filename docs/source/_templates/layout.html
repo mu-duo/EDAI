@@ -1,18 +1,14 @@
-{# Language switcher — renders at the top of <body>, before the document. #}
+{# Language switcher button — fixed top-right corner. #}
 {% extends "!layout.html" %}
 
 {% block relbar1 %}
-<div class="language-switch">
-  {% if display_language == 'en' %}
-    <span class="lang-label">🌐</span>
-    <span class="lang-link disabled">English</span>
-    <span class="lang-sep">|</span>
-    <a href="../zh/{{ pagename }}.html" class="lang-link">中文</a>
+<div class="lang-switch-wrapper">
+  {% if pagename.startswith('zh/') %}
+    <a href="../{{ pagename[3:] }}.html" class="lang-btn">EN</a>
+    <span class="lang-btn disabled">ZH</span>
   {% else %}
-    <span class="lang-label">🌐</span>
-    <a href="../en/{{ pagename }}.html" class="lang-link">English</a>
-    <span class="lang-sep">|</span>
-    <span class="lang-link disabled">中文</span>
+    <span class="lang-btn disabled">EN</span>
+    <a href="zh/{{ pagename }}.html" class="lang-btn">ZH</a>
   {% endif %}
 </div>
 {{ super() }}

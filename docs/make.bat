@@ -3,11 +3,12 @@
 pushd %~dp0
 
 REM Command file for Sphinx documentation
-REM Build both English and Chinese HTML versions.
 
 if "%SPHINXBUILD%" == "" (
 	set SPHINXBUILD=sphinx-build
 )
+set SOURCEDIR=source
+set BUILDDIR=build
 
 %SPHINXBUILD% >NUL 2>NUL
 if errorlevel 9009 (
@@ -22,52 +23,24 @@ if errorlevel 9009 (
 	exit /b 1
 )
 
-set SOURCEDIR=source
-set BUILDDIR=build
-set SPHINXOPTS=-c %SOURCEDIR%
+if "%1" == "" goto help
 
-if "%1" == "" goto html_both
-if "%1" == "html" goto html_both
-if "%1" == "en" goto html_en
-if "%1" == "zh" goto html_zh
+if "%1" == "singlehtml_zh" goto singlehtml_zh
+if "%1" == "singlehtml_en" goto singlehtml_en
 
-REM Other targets via Sphinx
-%SPHINXBUILD% -M %1 %SOURCEDIR%\en %BUILDDIR%\en %SPHINXOPTS% %O%
-%SPHINXBUILD% -M %1 %SOURCEDIR%\zh %BUILDDIR%\zh %SPHINXOPTS% %O%
+%SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 goto end
 
-:html_en
-set EDAI_LANG=en
-%SPHINXBUILD% -b html %SOURCEDIR%\en %BUILDDIR%\en %SPHINXOPTS% %O%
-echo.
-echo.Enlighs build finished. HTML pages are in %BUILDDIR%\en.
+:singlehtml_zh
+%SPHINXBUILD% -M singlehtml %SOURCEDIR% %BUILDDIR% -t language_zh %SPHINXOPTS% %O%
 goto end
 
-:html_zh
-set EDAI_LANG=zh
-%SPHINXBUILD% -b html %SOURCEDIR%\zh %BUILDDIR%\zh %SPHINXOPTS% %O%
-echo.
-echo.Chinese build finished. HTML pages are in %BUILDDIR%\zh.
-goto end
-
-:html_both
-set EDAI_LANG=en
-%SPHINXBUILD% -b html %SOURCEDIR%\en %BUILDDIR%\en %SPHINXOPTS% %O%
-echo.Enlighs build finished.
-
-set EDAI_LANG=zh
-%SPHINXBUILD% -b html %SOURCEDIR%\zh %BUILDDIR%\zh %SPHINXOPTS% %O%
-echo.Chinese build finished.
-
-echo.
-echo.Both builds finished. HTML pages are in %BUILDDIR%\en and %BUILDDIR%\zh.
+:singlehtml_en
+%SPHINXBUILD% -M singlehtml %SOURCEDIR% %BUILDDIR% -t language_en %SPHINXOPTS% %O%
 goto end
 
 :help
 %SPHINXBUILD% -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
-echo.
-echo.Targets: html (both en+zh), en (English only), zh (Chinese only)
-goto end
 
 :end
 popd

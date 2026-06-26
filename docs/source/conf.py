@@ -1,28 +1,17 @@
 # Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 from __future__ import annotations
 
-import os
-
-# ── Language ----------------------------------------------------------------
-# Set EDAI_LANG=en or EDAI_LANG=zh before building.
-_lang: str = os.environ.get("EDAI_LANG", "en").strip().lower()
-language = _lang
-
 # ── Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
 project = "EDAI"
 copyright = "2026, tanlinfeng"
 author = "tanlinfeng"
 release = "0.1.0"
 
-# ── General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+# ── Language ----------------------------------------------------------------
+language = "en"
 
+# ── General configuration ---------------------------------------------------
 extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.intersphinx",
@@ -40,36 +29,36 @@ exclude_patterns = [
     "_build",
     "Thumbs.db",
     ".DS_Store",
-    "en",
-    "zh",
 ]
 
 # ── Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
 html_theme = "alabaster"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
-if _lang == "zh":
-    html_theme_options = {
-        "description": "AI 驱动的 EDA 工作流 CLI 工具包",
-        "github_button": True,
-        "github_user": "tanlinfeng",
-        "github_repo": "EDAI",
-        "fixed_sidebar": True,
-        "sidebar_collapse": True,
-    }
-else:
-    html_theme_options = {
-        "description": "AI-powered CLI toolkit for EDA workflows",
-        "github_button": True,
-        "github_user": "tanlinfeng",
-        "github_repo": "EDAI",
-        "fixed_sidebar": True,
-        "sidebar_collapse": True,
-    }
-
-html_context = {
-    "display_language": _lang,
+html_theme_options = {
+    "description": "AI-powered CLI toolkit for EDA workflows",
+    "github_button": True,
+    "github_user": "tanlinfeng",
+    "github_repo": "EDAI",
+    "fixed_sidebar": True,
+    "sidebar_collapse": True,
 }
+
+# ── Language-specific single-file builds ------------------------------------
+# Controlled by -t <tag> on the sphinx-build command line.
+#   make singlehtml_en   → passes -t language_en
+#   make singlehtml_zh   → passes -t language_zh
+if tags.has("language_en"):  # type: ignore[name-defined]
+    exclude_patterns.extend([
+        "zh/overview.rst",
+        "zh/usage.rst",
+        "zh/architecture.rst",
+        "zh/index.rst",
+    ])
+elif tags.has("language_zh"):  # type: ignore[name-defined]
+    exclude_patterns.extend([
+        "overview.rst",
+        "usage.rst",
+        "architecture.rst",
+    ])

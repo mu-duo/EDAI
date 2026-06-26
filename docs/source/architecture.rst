@@ -6,7 +6,7 @@ Architecture
 EDAI is organised into three decoupled layers, each with a single
 responsibility:
 
-.. image:: ../_static/edai-architecture-detailed.png
+.. image:: _static/edai-architecture-detailed.png
    :alt: Detailed Architecture Diagram
    :width: 100 %
 
@@ -102,7 +102,7 @@ Cross-Cutting Concerns
 Data Flow
 ---------
 
-.. image:: ../_static/edai-data-flow.png
+.. image:: _static/edai-data-flow.png
    :alt: Data Flow Diagram
    :width: 100 %
 

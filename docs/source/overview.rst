@@ -15,7 +15,7 @@ The name stands for **E**\ lectronic **D**\ esign **AI** — it is both the
 tool name and the vision: an AI-native interface to the semiconductor design
 flow.
 
-.. image:: ../_static/edai-session.png
+.. image:: _static/edai-session.png
    :alt: EDAI TUI Session
    :width: 100 %
 
@@ -69,7 +69,7 @@ for development and troubleshooting.
 Architecture at a Glance
 ------------------------
 
-.. image:: ../_static/edai-architecture.png
+.. image:: _static/edai-architecture.png
    :alt: EDAI Architecture Diagram
    :width: 100 %
 
@@ -94,7 +94,7 @@ bridge the gap between design intent and silicon.**
 Near-Term Roadmap
 -----------------
 
-.. image:: ../_static/edai-roadmap.png
+.. image:: _static/edai-roadmap.png
    :alt: EDAI Roadmap
    :width: 100 %
 
@@ -116,7 +116,7 @@ The ultimate goal is an AI system that can take a **natural-language
 specification** and drive the physical design flow **from concept to
 GDSII** with minimal human intervention.
 
-.. image:: ../_static/edai-spec-to-gdsii.png
+.. image:: _static/edai-spec-to-gdsii.png
    :alt: Spec to GDSII Flow
    :width: 100 %
 

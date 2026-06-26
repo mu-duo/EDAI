@@ -1,43 +1,49 @@
-/* ── Language switcher bar ────────────────────────────────────────── */
-/* Fixed bar at the very top of the page, always visible.            */
+/* ── Language switcher button ─────────────────────────────────────── */
+/* Fixed button pair at top-right corner, always visible.              */
 
-.language-switch {
-    position: sticky;
-    top: 0;
+.lang-switch-wrapper {
+    position: fixed;
+    top: 12px;
+    right: 24px;
     z-index: 999;
-    text-align: right;
-    padding: 6px 24px;
-    font-size: 13px;
-    background: #2c3e50;
-    border-bottom: 2px solid #2980b9;
+    display: flex;
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
-.lang-label {
-    color: #bdc3c7;
-    margin-right: 4px;
-}
-
-.lang-link {
+.lang-btn {
     display: inline-block;
-    padding: 2px 10px;
-    color: #ecf0f1;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: monospace;
     text-decoration: none;
-    font-weight: 600;
-    border-radius: 3px;
-    transition: background 0.15s;
+    background: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #d5d8dc;
+    transition: background 0.15s, color 0.15s;
 }
 
-.lang-link:hover {
-    background: #34495e;
+.lang-btn:first-child {
+    border-radius: 6px 0 0 6px;
+    border-right: none;
+}
+
+.lang-btn:last-child {
+    border-radius: 0 6px 6px 0;
+}
+
+.lang-btn:hover {
+    background: #2980b9;
     color: #fff;
+    border-color: #2980b9;
 }
 
-.lang-link.disabled {
-    color: #95a5a6;
+.lang-btn.disabled {
+    background: #2980b9;
+    color: #fff;
+    border-color: #2980b9;
     cursor: default;
-}
-
-.lang-sep {
-    color: #7f8c8d;
-    margin: 0 4px;
 }
