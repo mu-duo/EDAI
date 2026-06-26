@@ -49,6 +49,13 @@ html_theme = themes[6]
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
 
+# ── Suppress false-positive warnings ----------------------------------------
+# When building with -t language_zh, the .. only:: not language_zh block in
+# index.rst is hidden, but Sphinx still resolves its toctree entries against
+# the (correctly) excluded English files, producing a harmless toc.excluded
+# warning.  Suppress it.
+suppress_warnings = ["toc.excluded"]
+
 # ── Language-specific single-file builds ------------------------------------
 # Controlled by -t <tag> on the sphinx-build command line.
 #   make singlehtml_en   → passes -t language_en
@@ -65,4 +72,5 @@ elif tags.has("language_zh"):  # type: ignore[name-defined]
         "overview.rst",
         "usage.rst",
         "architecture.rst",
+        "zh/index.rst",
     ])

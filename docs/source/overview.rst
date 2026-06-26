@@ -69,7 +69,7 @@ for development and troubleshooting.
 Architecture at a Glance
 ------------------------
 
-.. image:: _static/edai-architecture.png
+.. image:: /imgs/edai_architecture.png
    :alt: EDAI Architecture Diagram
    :width: 100 %
 
@@ -94,7 +94,7 @@ bridge the gap between design intent and silicon.**
 Near-Term Roadmap
 -----------------
 
-.. image:: _static/edai-roadmap.png
+.. image:: /imgs/edai_roadmap.png
    :alt: EDAI Roadmap
    :width: 100 %
 
@@ -116,7 +116,7 @@ The ultimate goal is an AI system that can take a **natural-language
 specification** and drive the physical design flow **from concept to
 GDSII** with minimal human intervention.
 
-.. image:: _static/edai-spec-to-gdsii.png
+.. image:: /imgs/edai_spec_to_gdsii.png
    :alt: Spec to GDSII Flow
    :width: 100 %
 
