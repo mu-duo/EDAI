@@ -14,12 +14,12 @@ from edai.core.debug import set_debug
 # Used by both create_backend() and the prompt/MORE inference helpers.
 
 BACKEND_INFO: dict[str, dict[str, str]] = {
-    "dc_shell":   {"prompt": r"dc_shell> ",        "type": "dc_shell"},
-    "innovus":    {"prompt": r"innovus> ",          "type": "innovus"},
-    "genus":      {"prompt": r"genus> ",            "type": "genus"},
-    "vivado":     {"prompt": r"vivado% ",           "type": "vivado"},
-    "tclsh":      {"prompt": r"% ",                 "type": "tclsh"},
-    "RainaSynth": {"prompt": r"RainaSynth>> ",      "type": "RainaSynth"},
+    "dc_shell": {"prompt": r"dc_shell> ", "type": "dc_shell"},
+    "innovus": {"prompt": r"innovus> ", "type": "innovus"},
+    "genus": {"prompt": r"genus> ", "type": "genus"},
+    "vivado": {"prompt": r"vivado% ", "type": "vivado"},
+    "tclsh": {"prompt": r"% ", "type": "tclsh"},
+    "RainaSynth": {"prompt": r"RainaSynth>> ", "type": "RainaSynth"},
 }
 
 # ── more-prompt inference map ─────────────────────────────────────
@@ -109,6 +109,34 @@ def _find_tclsh() -> str | None:
     return None
 
 
+def _find_rainasynth() -> str | None:
+    """Locate ``RainaSynth`` on ``RAINA_PATH``, or return ``None``."""
+    path_dirs = os.environ.get("RAINA_PATH", "").split(os.pathsep)
+    for d in path_dirs:
+        candidate = os.path.join(d, "RainaSynth")
+        if os.path.isfile(candidate):
+            return candidate
+        candidate_exe = f"{candidate}.exe"
+        if os.path.isfile(candidate_exe):
+            return candidate_exe
+
+    # detect RainaSynth in ${workspace}
+    # detect the path: thor_core/bin/RainaSynth
+    workspace = Path().cwd().absolute()
+    RainaSynthProject = "thor_core"
+    if RainaSynthProject in workspace.parts:
+        thor_core_index = workspace.parts.index(RainaSynthProject)
+        thor_core_path = Path(*workspace.parts[: thor_core_index + 1])
+        candidate = thor_core_path / "bin" / "RainaSynth"
+        if candidate.is_file():
+            return str(candidate)
+        candidate_exe = candidate.with_suffix(".exe")
+        if candidate_exe.is_file():
+            return str(candidate_exe)
+
+    return None
+
+
 # ── factory ───────────────────────────────────────────────────────
 
 
@@ -150,9 +178,7 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         if not os.path.isfile(cfg.path):
             raise FileNotFoundError(f"EDA tool binary not found: {cfg.path}")
         prompt = cfg.prompt if cfg.prompt is not None else _infer_prompt(cfg.path)
-        more = (
-            cfg.more_pattern if cfg.more_pattern is not None else _infer_more(cfg.path)
-        )
+        more = cfg.more_pattern if cfg.more_pattern is not None else _infer_more(cfg.path)
         backend_type = _infer_backend_type(cfg.path)
         from edai.core.eda_interactive import EDAInteractive
 
@@ -165,6 +191,25 @@ def create_backend(config: BackendConfig | None = None) -> Any:
         )
         backend.verbose = cfg.verbose
         print(f"Connected to EDA tool: {cfg.path}")
+        return backend
+
+    # ── auto-detect RainaSynth on RAINA_PATH ──────────────────────────────
+    raina = _find_rainasynth()
+    if raina:
+        prompt = cfg.prompt if cfg.prompt is not None else _infer_prompt(raina)
+        more = cfg.more_pattern if cfg.more_pattern is not None else _infer_more(raina)
+        backend_type = _infer_backend_type(raina)
+        from edai.core.eda_interactive import EDAInteractive
+
+        backend = EDAInteractive(
+            bin_path=raina,
+            prompt=prompt,
+            timeout=300,
+            more_pattern=more,
+            backend_type=backend_type,
+        )
+        backend.verbose = cfg.verbose
+        print(f"Connected to RainaSynth: {raina}")
         return backend
 
     # ── auto-detect tclsh on PATH ──────────────────────────────
