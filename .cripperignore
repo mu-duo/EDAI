@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+.mypy_cache
+.opencode
+.pytest_cache
+.ruff_cache
+.venv
+egg-info
+.env
+
+dist
+
+docs/source/imgs
+docs/build
